@@ -1,0 +1,124 @@
+================================================================================
+JessOS ADM Convert - Build & Deployment Notes
+================================================================================
+
+OVERVIEW
+--------
+JessOS ADM Convert is a modernized replacement for Apple's original "Apple
+Digital Masters Droplet" tool. It converts WAV and AIFF audio files to AAC
+(.m4a) format using Apple's afconvert with Apple Digital Masters encoding
+parameters (256kbps AAC, SoundCheck loudness normalization).
+
+Two versions are included:
+  - JessOS ADM Convert.app          : Full ADM compliance with SoundCheck
+  - JessOS ADM Convert - No SoundCheck.app : Fast single-pass conversion
+
+
+IMPROVEMENTS OVER APPLE'S ORIGINAL DROPLET
+------------------------------------------
+1. Apple Silicon Native
+   - Runs natively on ARM64 (M1/M2/M3/M4 chips)
+   - No Rosetta 2 emulation required
+   - Original Apple droplet was x86_64/i386 only
+
+2. Parallel Processing
+   - Converts up to 12 files simultaneously (configurable)
+   - Dramatically faster batch processing on multi-core Macs
+   - Original processed files sequentially (one at a time)
+
+3. Silent Operation
+   - No popup dialogs or alerts
+   - Clean, minimal progress window
+   - Original had multiple alert dialogs
+
+4. Modern Progress UI
+   - Native Swift/AppKit progress window
+   - Shows current file being processed
+   - Purple-tinted progress bar
+   - Displays conversion count in real-time
+
+5. Streaming Architecture
+   - Begins processing immediately as files are discovered
+   - No waiting for full file list before starting
+   - Shows activity within ~0.5 seconds of drop
+
+6. Optimized Temp File Handling
+   - CAF intermediates stored in /tmp/JessOS_ADM_Convert/
+   - Automatic cleanup after conversion
+   - Leverages macOS disk caching for speed
+
+7. Network Drive Support
+   - Works with files on mounted network volumes
+   - No path or permission issues
+
+8. Duplicate File Handling
+   - Automatically appends -1, -2, etc. if output file exists
+   - Never overwrites existing files
+
+
+================================================================================
+BUILD LOG
+================================================================================
+
+--------------------------------------------------------------------------------
+VERSION 1.0 - 2025-01-25
+--------------------------------------------------------------------------------
+
+Initial Release
+
+Core Features:
+  [+] Apple Silicon native (ARM64) compilation
+  [+] Parallel processing with xargs -P (12 concurrent jobs)
+  [+] Two-pass ADM conversion: WAV -> CAF (SoundCheck) -> AAC
+  [+] Silent operation - removed all display alert/dialog calls
+  [+] Swift-based progress window with real-time updates
+  [+] Streaming file discovery - processing starts immediately
+  [+] START: messages show files as soon as conversion begins
+  [+] Automatic duplicate filename handling (-1, -2, etc.)
+
+Performance Optimizations:
+  [+] Temp CAF files written to /tmp/JessOS_ADM_Convert/
+  [+] Efficient sample rate detection with afinfo
+  [+] High sample rate files (>48kHz) automatically downsampled to 48kHz
+  [+] Removed bash string concatenation bottleneck in file collection
+
+UI/UX:
+  [+] Floating progress window titled "JessOS ADM Convert"
+  [+] Purple-tinted progress bar
+  [+] Audio file icon displayed during conversion
+  [+] Version label: "JessOS ADM Convert v1 :: Optimized for Apple Silicone Native"
+  [+] "Converting X files..." status with filename display
+  [+] "Complete! Converted X files" on finish
+  [+] 2-second delay before auto-close on completion
+
+No SoundCheck Variant:
+  [+] Single-pass direct WAV -> AAC conversion
+  [+] Significantly faster (no CAF intermediate)
+  [+] No temp files required
+  [+] For use when ADM compliance not required
+
+Technical Details:
+  - Built with: swiftc (Swift), osacompile (AppleScript)
+  - Encoding: afconvert -d aac -f m4af -b 256000 -q 127 -s 2
+  - SoundCheck: --soundcheck-generate / --soundcheck-read
+  - Sample rate conversion: --src-complexity bats -r 127
+
+Known Limitations:
+  - Progress bar is indeterminate (animated) since streaming mode
+    doesn't know total file count upfront
+  - First m4a appears after CAF pass completes (~2-3 sec for large files)
+
+Files Included:
+  - JessOS ADM Convert.app
+  - JessOS ADM Convert - No SoundCheck.app
+  - ADMProgressSource/main.swift (progress window source)
+  - BUILD_NOTES.txt (this file)
+
+--------------------------------------------------------------------------------
+VERSION 2.0 - [DATE]
+--------------------------------------------------------------------------------
+
+[Future improvements will be logged here]
+
+
+================================================================================
