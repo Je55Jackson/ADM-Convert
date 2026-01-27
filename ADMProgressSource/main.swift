@@ -15,7 +15,7 @@ class ProgressWindow: NSWindow {
         let windowHeight: CGFloat = 140
 
         // Create UI elements
-        statusLabel = NSTextField(labelWithString: "Converting...")
+        statusLabel = NSTextField(labelWithString: "Preparing...")
         statusLabel.font = NSFont.systemFont(ofSize: 14, weight: .medium)
         statusLabel.textColor = .labelColor
         statusLabel.alignment = .center
@@ -28,7 +28,7 @@ class ProgressWindow: NSWindow {
 
         progressBar = NSProgressIndicator()
         progressBar.style = .bar
-        progressBar.isIndeterminate = true
+        progressBar.isIndeterminate = false
         progressBar.minValue = 0
         progressBar.maxValue = 100
         progressBar.doubleValue = 0
@@ -156,18 +156,8 @@ class ProgressWindow: NSWindow {
 
     func updateWindow(current: Int, total: Int, filename: String) {
         DispatchQueue.main.async {
-            if total > 0 {
-                self.statusLabel.stringValue = "Converting \(current) of \(total) files"
-                self.progressBar.isIndeterminate = false
-                self.progressBar.doubleValue = Double(current) / Double(total) * 100
-            } else {
-                // Streaming mode - no total known yet
-                self.statusLabel.stringValue = "Converted \(current) file\(current == 1 ? "" : "s")..."
-                if !self.progressBar.isIndeterminate {
-                    self.progressBar.isIndeterminate = true
-                    self.progressBar.startAnimation(nil)
-                }
-            }
+            self.statusLabel.stringValue = "Converting \(current) of \(total) file\(total == 1 ? "" : "s")"
+            self.progressBar.doubleValue = Double(current) / Double(total) * 100
             self.fileLabel.stringValue = filename
             self.audioIcon.isHidden = filename.isEmpty
             self.centerIconRow(filename: filename)
@@ -196,7 +186,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         window = ProgressWindow()
         window.makeKeyAndOrderFront(nil)
-        window.progressBar.startAnimation(nil)
         NSApp.activate(ignoringOtherApps: true)
 
         // Read from stdin in background
@@ -212,12 +201,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             if trimmed.hasPrefix("TOTAL:") {
                 let value = String(trimmed.dropFirst(6))
                 total = Int(value) ?? 0
-                // Switch to determinate mode immediately
+                // Update status with file count
                 DispatchQueue.main.async {
-                    self.window.progressBar.stopAnimation(nil)
-                    self.window.progressBar.isIndeterminate = false
-                    self.window.progressBar.doubleValue = 0
-                    self.window.statusLabel.stringValue = "Converting 0 of \(self.total) files"
+                    self.window.statusLabel.stringValue = "Converting 0 of \(self.total) file\(self.total == 1 ? "" : "s")"
                 }
             } else if trimmed.hasPrefix("START:") {
                 let filename = String(trimmed.dropFirst(6))

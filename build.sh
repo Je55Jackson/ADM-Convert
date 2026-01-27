@@ -93,9 +93,8 @@ if [ "$DEPLOY" = true ]; then
     rm -rf "/Applications/$APP_NAME.app"
     cp -R "$APP_BUNDLE" /Applications/
 
-    # Re-register with Launch Services and refresh Dock
+    # Re-register with Launch Services
     /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "/Applications/$APP_NAME.app"
-    killall Dock 2>/dev/null || true
 
     echo "Deployed to /Applications/$APP_NAME.app"
 else

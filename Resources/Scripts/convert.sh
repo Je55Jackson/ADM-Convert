@@ -66,7 +66,21 @@ export TEMP_DIR
 export SOUNDCHECK_MODE
 export OUTPUT_MODE
 
-xargs -P "$PARALLEL_JOBS" -I {} bash -c 'process_file "$1" "$SOUNDCHECK_MODE" "$OUTPUT_MODE"' _ {}
+# Read all files into array first to count them
+files=()
+while IFS= read -r file; do
+    [[ -n "$file" ]] && files+=("$file")
+done
+
+# For small batches (≤3 files), process directly without xargs overhead
+if [[ ${#files[@]} -le 3 ]]; then
+    for file in "${files[@]}"; do
+        process_file "$file" "$SOUNDCHECK_MODE" "$OUTPUT_MODE"
+    done
+else
+    # For larger batches, use parallel processing
+    printf '%s\n' "${files[@]}" | xargs -P "$PARALLEL_JOBS" -I {} bash -c 'process_file "$1" "$SOUNDCHECK_MODE" "$OUTPUT_MODE"' _ {}
+fi
 
 # Cleanup temp directory
 rm -rf "$TEMP_DIR"

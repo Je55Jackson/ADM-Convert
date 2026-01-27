@@ -17,7 +17,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // Parallel jobs setting
     let parallelJobs = "12"
 
+    // Track if app was already running when files arrive (Keka-style behavior)
+    private var launchTime = Date()
+    private var activeConversions = 0
+
+    // Check if app was just launched (within last 2 seconds)
+    private var wasJustLaunched: Bool {
+        return Date().timeIntervalSince(launchTime) < 2.0
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
+        launchTime = Date()
+
         // Register default preferences
         UserDefaults.standard.register(defaults: ["includeSoundCheck": true, "useOutputFolder": false])
 
@@ -34,6 +45,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
         let menu = NSMenu()
+
+        // App name and version at top
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "2.1"
+        let titleItem = NSMenuItem(title: "JessOS ADM Convert v\(version)", action: nil, keyEquivalent: "")
+        titleItem.isEnabled = false
+        menu.addItem(titleItem)
+        menu.addItem(NSMenuItem.separator())
 
         let includeItem = NSMenuItem(
             title: "Include SoundCheck Metadata",
@@ -100,13 +118,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func application(_ sender: NSApplication, openFile filename: String) -> Bool {
         let url = URL(fileURLWithPath: filename)
-        processFiles([url])
+        // If app was just launched (< 2 sec ago), quit after conversion (Keka-style)
+        processFiles([url], quitWhenDone: wasJustLaunched)
         return true
     }
 
     func application(_ sender: NSApplication, openFiles filenames: [String]) {
         let urls = filenames.map { URL(fileURLWithPath: $0) }
-        processFiles(urls)
+        // If app was just launched (< 2 sec ago), quit after conversion (Keka-style)
+        processFiles(urls, quitWhenDone: wasJustLaunched)
         NSApp.reply(toOpenOrPrint: .success)
     }
 
@@ -142,7 +162,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Processing
 
-    func processFiles(_ urls: [URL]) {
+    func processFiles(_ urls: [URL], quitWhenDone: Bool = false) {
         guard !urls.isEmpty else { return }
 
         // Get paths to bundled resources
@@ -165,6 +185,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Build and execute the command
         let command = "\(wrapperPath.shellQuoted()) \(scriptPath.shellQuoted()) \(progressAppPath.shellQuoted()) \(parallelJobs) \(soundCheckFlag) \(outputFolderFlag) \(pathString)"
 
+        // Track active conversions
+        activeConversions += 1
+
         DispatchQueue.global(qos: .userInitiated).async {
             let task = Process()
             task.executableURL = URL(fileURLWithPath: "/bin/zsh")
@@ -172,8 +195,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
             do {
                 try task.run()
+                task.waitUntilExit()  // Wait for conversion to complete
+
+                DispatchQueue.main.async {
+                    self.activeConversions -= 1
+
+                    // If app was launched for this conversion and no other conversions active, quit
+                    if quitWhenDone && self.activeConversions == 0 {
+                        // Small delay to let progress window close gracefully
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                            NSApp.terminate(nil)
+                        }
+                    }
+                }
             } catch {
                 DispatchQueue.main.async {
+                    self.activeConversions -= 1
                     self.showError("Failed to start conversion: \(error.localizedDescription)")
                 }
             }
