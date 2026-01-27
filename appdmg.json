@@ -1,0 +1,17 @@
+{
+  "title": "JessOS ADM Convert",
+  "icon": "Resources/AppIcon.icns",
+  "background": "Resources/dmg_background.png",
+  "icon-size": 128,
+  "window": {
+    "size": {
+      "width": 500,
+      "height": 400
+    }
+  },
+  "contents": [
+    { "x": 120, "y": 120, "type": "file", "path": "build/JessOS ADM Convert.app" },
+    { "x": 380, "y": 120, "type": "link", "path": "/Applications" },
+    { "x": 250, "y": 300, "type": "file", "path": "JessOS_ADM_Convert_BUILD_NOTES.txt", "name": "README.txt" }
+  ]
+}

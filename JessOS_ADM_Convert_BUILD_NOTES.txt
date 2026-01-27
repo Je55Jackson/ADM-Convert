@@ -9,9 +9,10 @@ Digital Masters Droplet" tool. It converts WAV and AIFF audio files to AAC
 (.m4a) format using Apple's afconvert with Apple Digital Masters encoding
 parameters (256kbps AAC, SoundCheck loudness normalization).
 
-Two versions are included:
-  - JessOS ADM Convert.app          : Full ADM compliance with SoundCheck
-  - JessOS ADM Convert - No SoundCheck.app : Fast single-pass conversion
+A single app with configurable options (right-click dock icon):
+  - "Include SoundCheck Metadata" (full ADM compliance)
+  - "Exclude SoundCheck Metadata (Fast)" (single-pass, faster)
+  - "Output to M4A Folder" (organize output files in subfolder)
 
 
 IMPROVEMENTS OVER APPLE'S ORIGINAL DROPLET
@@ -61,6 +62,51 @@ BUILD LOG
 ================================================================================
 
 --------------------------------------------------------------------------------
+VERSION 2.0 - 2025-01-25
+--------------------------------------------------------------------------------
+
+Native Swift Cocoa App Rewrite
+
+Major Changes:
+  [+] Complete rewrite as native Swift Cocoa application
+  [+] Single app replaces both SoundCheck and No-SoundCheck variants
+  [+] Dock menu with SoundCheck toggle (right-click dock icon)
+  [+] "Output to M4A Folder" option - creates M4A subfolder for output
+  [+] macOS Services menu integration ("Convert to M4A using JessOS")
+  [+] Drag-and-drop support for files and folders
+  [+] "Convert Files..." option in dock menu for file picker
+
+UI Improvements:
+  [+] Determinate progress bar - shows actual progress (X of Y files)
+  [+] Immediate switch to progress mode when file count is known
+  [+] File count displayed before conversion starts
+  [+] No more indeterminate "wanding" progress bar
+
+Performance Optimizations:
+  [+] "No SoundCheck" mode now does direct WAV -> AAC (no temp files)
+  [+] Automatic temp directory cleanup after conversion
+  [+] Removed unused framework dependencies
+
+Architecture:
+  [+] Pure Swift/AppKit (no AppleScript wrapper)
+  [+] NSApplicationDelegate for proper file handling
+  [+] UserDefaults for persisting preferences
+  [+] Clean project structure with Sources/, Resources/, build.sh
+  [+] DMG packaging with README included
+  [+] Build script with --deploy flag for quick installation
+
+Dock Menu Options:
+  - Include SoundCheck Metadata (checked by default)
+  - Exclude SoundCheck Metadata (Fast)
+  - Output to M4A Folder
+  - Convert Files...
+
+Files Included:
+  - JessOS ADM Convert.app
+  - README.txt (this file)
+
+
+--------------------------------------------------------------------------------
 VERSION 1.0 - 2025-01-25
 --------------------------------------------------------------------------------
 
@@ -103,22 +149,10 @@ Technical Details:
   - SoundCheck: --soundcheck-generate / --soundcheck-read
   - Sample rate conversion: --src-complexity bats -r 127
 
-Known Limitations:
-  - Progress bar is indeterminate (animated) since streaming mode
-    doesn't know total file count upfront
-  - First m4a appears after CAF pass completes (~2-3 sec for large files)
-
-Files Included:
-  - JessOS ADM Convert.app
-  - JessOS ADM Convert - No SoundCheck.app
-  - ADMProgressSource/main.swift (progress window source)
-  - BUILD_NOTES.txt (this file)
-
---------------------------------------------------------------------------------
-VERSION 2.0 - [DATE]
---------------------------------------------------------------------------------
-
-[Future improvements will be logged here]
+Known Limitations (fixed in v2.0):
+  - Progress bar was indeterminate (animated) since streaming mode
+    didn't know total file count upfront
+  - Required two separate apps for SoundCheck modes
 
 
 ================================================================================

@@ -212,8 +212,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             if trimmed.hasPrefix("TOTAL:") {
                 let value = String(trimmed.dropFirst(6))
                 total = Int(value) ?? 0
+                // Switch to determinate mode immediately
                 DispatchQueue.main.async {
-                    self.window.progressBar.maxValue = Double(self.total)
+                    self.window.progressBar.stopAnimation(nil)
+                    self.window.progressBar.isIndeterminate = false
+                    self.window.progressBar.doubleValue = 0
+                    self.window.statusLabel.stringValue = "Converting 0 of \(self.total) files"
                 }
             } else if trimmed.hasPrefix("START:") {
                 let filename = String(trimmed.dropFirst(6))
