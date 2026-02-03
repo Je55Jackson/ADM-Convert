@@ -17,24 +17,23 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // Parallel jobs setting
     let parallelJobs = "12"
 
-    // Track if app was already running when files arrive (Keka-style behavior)
-    private var launchTime = Date()
+    // Keka-style quit: if app was closed when files arrived, quit after conversion
+    // True during the first few seconds after launch; cleared on first file open or after timeout
+    private var quitAfterNextConversion = true
     private var activeConversions = 0
 
-    // Check if app was just launched (within last 2 seconds)
-    private var wasJustLaunched: Bool {
-        return Date().timeIntervalSince(launchTime) < 2.0
-    }
-
     func applicationDidFinishLaunching(_ notification: Notification) {
-        launchTime = Date()
-
         // Register default preferences
         UserDefaults.standard.register(defaults: ["includeSoundCheck": true, "useOutputFolder": false])
 
         // Register for services
         NSApp.servicesProvider = self
         NSUpdateDynamicServices()
+
+        // If no files arrive within 5 seconds, user launched the app manually - don't quit
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) {
+            self.quitAfterNextConversion = false
+        }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -118,15 +117,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func application(_ sender: NSApplication, openFile filename: String) -> Bool {
         let url = URL(fileURLWithPath: filename)
-        // If app was just launched (< 2 sec ago), quit after conversion (Keka-style)
-        processFiles([url], quitWhenDone: wasJustLaunched)
+        let shouldQuit = quitAfterNextConversion
+        quitAfterNextConversion = false  // Only the first batch gets quit behavior
+        processFiles([url], quitWhenDone: shouldQuit)
         return true
     }
 
     func application(_ sender: NSApplication, openFiles filenames: [String]) {
         let urls = filenames.map { URL(fileURLWithPath: $0) }
-        // If app was just launched (< 2 sec ago), quit after conversion (Keka-style)
-        processFiles(urls, quitWhenDone: wasJustLaunched)
+        let shouldQuit = quitAfterNextConversion
+        quitAfterNextConversion = false  // Only the first batch gets quit behavior
+        processFiles(urls, quitWhenDone: shouldQuit)
         NSApp.reply(toOpenOrPrint: .success)
     }
 
@@ -157,7 +158,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        processFiles(urls)
+        let shouldQuit = quitAfterNextConversion
+        quitAfterNextConversion = false
+        processFiles(urls, quitWhenDone: shouldQuit)
     }
 
     // MARK: - Processing
