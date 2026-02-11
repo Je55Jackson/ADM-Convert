@@ -1,0 +1,7 @@
+{
+  "version": "3.0",
+  "build": "1",
+  "dmgURL": "https://github.com/Je55Jackson/ADM-Convert/releases/download/v3.0/JessOS-ADM-Convert.dmg",
+  "releaseNotes": "Auto-update support added.",
+  "minimumSystemVersion": "14.0"
+}

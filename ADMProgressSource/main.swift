@@ -1,29 +1,56 @@
 import Cocoa
 import QuartzCore
 
+// MARK: - Gradient Background View
+
+class GradientBackgroundView: NSView {
+    override func draw(_ dirtyRect: NSRect) {
+        // Orange/red gradient matching main app
+        let topColor = NSColor(red: 0.95, green: 0.4, blue: 0.2, alpha: 1.0)
+        let bottomColor = NSColor(red: 0.7, green: 0.15, blue: 0.3, alpha: 1.0)
+
+        let gradient = NSGradient(starting: topColor, ending: bottomColor)
+        gradient?.draw(in: bounds, angle: -45)
+    }
+
+    override var isOpaque: Bool { true }
+}
+
 // MARK: - ProgressWindow
+
 class ProgressWindow: NSWindow {
+    let backgroundView: GradientBackgroundView
     let statusLabel: NSTextField
     let fileLabel: NSTextField
     let progressBar: NSProgressIndicator
     let versionLabel: NSTextField
-    let audioIcon: NSImageView
 
     init() {
         // Window size
-        let windowWidth: CGFloat = 400
-        let windowHeight: CGFloat = 140
+        let windowWidth: CGFloat = 380
+        let windowHeight: CGFloat = 120
 
-        // Create UI elements
+        // Calculate window position: centered horizontally, above the dock
+        let screenFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
+        let windowX = screenFrame.midX - windowWidth / 2
+        let windowY = screenFrame.minY + 20  // 20px above dock area
+
+        // Create background
+        backgroundView = GradientBackgroundView(frame: NSRect(x: 0, y: 0, width: windowWidth, height: windowHeight))
+        backgroundView.wantsLayer = true
+        backgroundView.layer?.cornerRadius = 16
+        backgroundView.layer?.masksToBounds = true
+
+        // Create UI elements with white styling
         statusLabel = NSTextField(labelWithString: "Preparing...")
-        statusLabel.font = NSFont.systemFont(ofSize: 14, weight: .medium)
-        statusLabel.textColor = .labelColor
+        statusLabel.font = NSFont.systemFont(ofSize: 15, weight: .semibold)
+        statusLabel.textColor = .white
         statusLabel.alignment = .center
 
         fileLabel = NSTextField(labelWithString: "")
-        fileLabel.font = NSFont.systemFont(ofSize: 11)
-        fileLabel.textColor = .secondaryLabelColor
-        fileLabel.alignment = .left
+        fileLabel.font = NSFont.systemFont(ofSize: 12)
+        fileLabel.textColor = NSColor.white.withAlphaComponent(0.8)
+        fileLabel.alignment = .center
         fileLabel.lineBreakMode = .byTruncatingMiddle
 
         progressBar = NSProgressIndicator()
@@ -32,126 +59,80 @@ class ProgressWindow: NSWindow {
         progressBar.minValue = 0
         progressBar.maxValue = 100
         progressBar.doubleValue = 0
+        progressBar.wantsLayer = true
+        progressBar.layer?.cornerRadius = 3
 
-        // Apply purple tint using color filter
-        if let purpleFilter = CIFilter(name: "CIFalseColor") {
-            purpleFilter.setDefaults()
-            purpleFilter.setValue(CIColor(red: 0.55, green: 0.36, blue: 0.76, alpha: 1.0), forKey: "inputColor0")
-            purpleFilter.setValue(CIColor(red: 0.75, green: 0.65, blue: 0.88, alpha: 1.0), forKey: "inputColor1")
-            progressBar.contentFilters = [purpleFilter]
+        // White tint for progress bar
+        if let whiteFilter = CIFilter(name: "CIFalseColor") {
+            whiteFilter.setDefaults()
+            whiteFilter.setValue(CIColor(red: 1.0, green: 1.0, blue: 1.0, alpha: 0.3), forKey: "inputColor0")
+            whiteFilter.setValue(CIColor(red: 1.0, green: 1.0, blue: 1.0, alpha: 0.9), forKey: "inputColor1")
+            progressBar.contentFilters = [whiteFilter]
         }
 
-        versionLabel = NSTextField(labelWithString: "JessOS ADM Convert v1 :: Optimized for Apple Silicone Native")
-        versionLabel.font = NSFont.systemFont(ofSize: 9)
-        versionLabel.textColor = .tertiaryLabelColor
+        versionLabel = NSTextField(labelWithString: "JessOS ADM Convert")
+        versionLabel.font = NSFont.systemFont(ofSize: 10)
+        versionLabel.textColor = NSColor.white.withAlphaComponent(0.5)
         versionLabel.alignment = .center
-
-        // Load audio icon at original size (32x32)
-        audioIcon = NSImageView()
-        let executablePath = Bundle.main.executablePath ?? ""
-        let resourcesPath = (executablePath as NSString).deletingLastPathComponent
-        let iconPath = (resourcesPath as NSString).appendingPathComponent("audio-icon.svg")
-        if let image = NSImage(contentsOfFile: iconPath) {
-            audioIcon.image = image
-        }
-        audioIcon.imageScaling = .scaleProportionallyUpOrDown
-
-        // Calculate window position (center of screen)
-        let screenFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 800, height: 600)
-        let windowX = screenFrame.midX - windowWidth / 2
-        let windowY = screenFrame.midY - windowHeight / 2
 
         super.init(
             contentRect: NSRect(x: windowX, y: windowY, width: windowWidth, height: windowHeight),
-            styleMask: [.titled, .closable],
+            styleMask: [.borderless],
             backing: .buffered,
             defer: false
         )
 
-        self.title = "JessOS ADM Convert"
-        self.isReleasedWhenClosed = false
+        self.isOpaque = false
+        self.backgroundColor = .clear
+        self.hasShadow = true
+        self.isMovableByWindowBackground = true
         self.level = .floating
+        self.isReleasedWhenClosed = false
 
         setupUI()
     }
 
     private func setupUI() {
-        guard let contentView = self.contentView else { return }
+        self.contentView = backgroundView
 
         let padding: CGFloat = 20
         let elementHeight: CGFloat = 20
         let spacing: CGFloat = 8
-        let iconSize: CGFloat = 32
+        let contentWidth = backgroundView.bounds.width - (padding * 2)
 
         // Layout from top to bottom
-        let contentWidth = contentView.bounds.width - (padding * 2)
-
         statusLabel.frame = NSRect(
             x: padding,
-            y: contentView.bounds.height - padding - elementHeight,
+            y: backgroundView.bounds.height - padding - elementHeight,
             width: contentWidth,
             height: elementHeight
         )
 
         progressBar.frame = NSRect(
             x: padding,
-            y: statusLabel.frame.minY - spacing - elementHeight,
+            y: statusLabel.frame.minY - spacing - 6,
+            width: contentWidth,
+            height: 6
+        )
+
+        fileLabel.frame = NSRect(
+            x: padding,
+            y: progressBar.frame.minY - spacing - elementHeight,
             width: contentWidth,
             height: elementHeight
         )
 
-        // Audio icon + file label row - initial position (will be centered dynamically)
-        let iconRowY = progressBar.frame.minY - spacing - iconSize
-
-        audioIcon.frame = NSRect(
-            x: 0,
-            y: iconRowY,
-            width: iconSize,
-            height: iconSize
-        )
-
-        fileLabel.frame = NSRect(
-            x: 0,
-            y: iconRowY + (iconSize - elementHeight) / 2 - 2,
-            width: 300,
-            height: elementHeight
-        )
-        fileLabel.alignment = .left
-
         versionLabel.frame = NSRect(
             x: padding,
-            y: 4,
+            y: 8,
             width: contentWidth,
             height: 14
         )
 
-        contentView.addSubview(statusLabel)
-        contentView.addSubview(progressBar)
-        contentView.addSubview(audioIcon)
-        contentView.addSubview(fileLabel)
-        contentView.addSubview(versionLabel)
-    }
-
-    func centerIconRow(filename: String) {
-        guard let contentView = self.contentView else { return }
-
-        let iconSize: CGFloat = 32
-        let iconLabelGap: CGFloat = 8
-        let maxTextWidth: CGFloat = 280
-
-        // Calculate text width
-        let attributes: [NSAttributedString.Key: Any] = [.font: fileLabel.font!]
-        var textWidth = (filename as NSString).size(withAttributes: attributes).width
-        textWidth = min(textWidth, maxTextWidth) // Cap at max width
-
-        // Total width of icon + gap + text
-        let totalWidth = iconSize + iconLabelGap + textWidth
-        let startX = (contentView.bounds.width - totalWidth) / 2
-
-        // Update positions
-        audioIcon.frame.origin.x = startX
-        fileLabel.frame.origin.x = startX + iconSize + iconLabelGap
-        fileLabel.frame.size.width = textWidth + 10 // Small buffer
+        backgroundView.addSubview(statusLabel)
+        backgroundView.addSubview(progressBar)
+        backgroundView.addSubview(fileLabel)
+        backgroundView.addSubview(versionLabel)
     }
 
     func updateWindow(current: Int, total: Int, filename: String) {
@@ -159,8 +140,6 @@ class ProgressWindow: NSWindow {
             self.statusLabel.stringValue = "Converting \(current) of \(total) file\(total == 1 ? "" : "s")"
             self.progressBar.doubleValue = Double(current) / Double(total) * 100
             self.fileLabel.stringValue = filename
-            self.audioIcon.isHidden = filename.isEmpty
-            self.centerIconRow(filename: filename)
         }
     }
 
@@ -168,13 +147,13 @@ class ProgressWindow: NSWindow {
         DispatchQueue.main.async {
             self.statusLabel.stringValue = "Complete! Converted \(total) file\(total == 1 ? "" : "s")"
             self.fileLabel.stringValue = ""
-            self.audioIcon.isHidden = true
             self.progressBar.doubleValue = 100
         }
     }
 }
 
 // MARK: - AppDelegate
+
 class AppDelegate: NSObject, NSApplicationDelegate {
     var window: ProgressWindow!
     var total: Int = 0
@@ -201,7 +180,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             if trimmed.hasPrefix("TOTAL:") {
                 let value = String(trimmed.dropFirst(6))
                 total = Int(value) ?? 0
-                // Update status with file count
                 DispatchQueue.main.async {
                     self.window.statusLabel.stringValue = "Converting 0 of \(self.total) file\(self.total == 1 ? "" : "s")"
                 }
@@ -209,8 +187,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 let filename = String(trimmed.dropFirst(6))
                 DispatchQueue.main.async {
                     self.window.fileLabel.stringValue = filename
-                    self.window.audioIcon.isHidden = false
-                    self.window.centerIconRow(filename: filename)
                 }
             } else if trimmed.hasPrefix("FILE:") {
                 current += 1
@@ -220,12 +196,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 window.showComplete(total: current)
 
                 if debugKeepOpen {
-                    // Keep window open for UI debugging
                     DispatchQueue.main.async {
-                        self.window.statusLabel.stringValue = "DEBUG MODE: Window kept open for UI tweaking"
+                        self.window.statusLabel.stringValue = "DEBUG MODE: Window kept open"
                     }
                 } else {
-                    // Normal behavior: close after delay
                     DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
                         NSApp.terminate(nil)
                     }
@@ -233,7 +207,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        // stdin closed without DONE - keep open if debugging
+        // stdin closed without DONE
         if !debugKeepOpen {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                 NSApp.terminate(nil)
@@ -247,6 +221,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 // MARK: - Main
+
 let app = NSApplication.shared
 let delegate = AppDelegate()
 app.delegate = delegate

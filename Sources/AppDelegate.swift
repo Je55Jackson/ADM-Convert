@@ -1,26 +1,40 @@
 import Cocoa
+import SwiftUI
 
-class AppDelegate: NSObject, NSApplicationDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, ObservableObject {
 
-    // User preference for SoundCheck
+    // Shared conversion manager
+    let conversionManager = ConversionManager()
+    let updateManager = UpdateManager()
+
+    // Window visibility tracking
+    @Published var isWindowVisible = false
+
+    // Main window controller
+    private var mainWindowController: MainWindowController?
+
+    // User preferences (bridged from ConversionManager)
     var includeSoundCheck: Bool {
         get { UserDefaults.standard.bool(forKey: "includeSoundCheck") }
         set { UserDefaults.standard.set(newValue, forKey: "includeSoundCheck") }
     }
 
-    // User preference for output folder
     var useOutputFolder: Bool {
         get { UserDefaults.standard.bool(forKey: "useOutputFolder") }
         set { UserDefaults.standard.set(newValue, forKey: "useOutputFolder") }
     }
 
-    // Parallel jobs setting
     let parallelJobs = "12"
 
-    // Keka-style quit: if app was closed when files arrived, quit after conversion
-    // True during the first few seconds after launch; cleared on first file open or after timeout
+    // Keka-style quit behavior
     private var quitAfterNextConversion = true
     private var activeConversions = 0
+    private var launchedWithFiles = false
+
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        // Set up the main menu bar
+        setupMainMenu()
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Register default preferences
@@ -30,14 +44,141 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.servicesProvider = self
         NSUpdateDynamicServices()
 
-        // If no files arrive within 5 seconds, user launched the app manually - don't quit
+        // Create window controller (but don't show window yet)
+        mainWindowController = MainWindowController(appDelegate: self)
+
+        // Wait a moment to see if files arrive, then show window if not
+        // Reduced delay for snappier normal launch
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            if !self.launchedWithFiles {
+                // User launched app normally - show the window
+                self.showMainWindow()
+                self.quitAfterNextConversion = false
+            }
+        }
+
+        // Safety: after 5 seconds, definitely don't quit
         DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) {
             self.quitAfterNextConversion = false
         }
+
+        // Silent update check on launch (no alerts if offline or up to date)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+            self.updateManager.checkForUpdates(userInitiated: false)
+        }
+    }
+
+    // MARK: - Main Menu Setup
+
+    private func setupMainMenu() {
+        let mainMenu = NSMenu()
+
+        // App menu
+        let appMenuItem = NSMenuItem()
+        mainMenu.addItem(appMenuItem)
+        let appMenu = NSMenu()
+        appMenuItem.submenu = appMenu
+
+        let appName = "JessOS ADM Convert"
+        appMenu.addItem(NSMenuItem(title: "About \(appName)", action: #selector(showAbout(_:)), keyEquivalent: ""))
+        appMenu.addItem(NSMenuItem(title: "Check for Updates...", action: #selector(checkForUpdates(_:)), keyEquivalent: ""))
+        appMenu.addItem(NSMenuItem.separator())
+
+        let servicesItem = NSMenuItem(title: "Services", action: nil, keyEquivalent: "")
+        let servicesMenu = NSMenu(title: "Services")
+        servicesItem.submenu = servicesMenu
+        NSApp.servicesMenu = servicesMenu
+        appMenu.addItem(servicesItem)
+        appMenu.addItem(NSMenuItem.separator())
+
+        appMenu.addItem(NSMenuItem(title: "Hide \(appName)", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h"))
+        let hideOthersItem = NSMenuItem(title: "Hide Others", action: #selector(NSApplication.hideOtherApplications(_:)), keyEquivalent: "h")
+        hideOthersItem.keyEquivalentModifierMask = [.command, .option]
+        appMenu.addItem(hideOthersItem)
+        appMenu.addItem(NSMenuItem(title: "Show All", action: #selector(NSApplication.unhideAllApplications(_:)), keyEquivalent: ""))
+        appMenu.addItem(NSMenuItem.separator())
+        appMenu.addItem(NSMenuItem(title: "Quit \(appName)", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+
+        // File menu
+        let fileMenuItem = NSMenuItem()
+        mainMenu.addItem(fileMenuItem)
+        let fileMenu = NSMenu(title: "File")
+        fileMenuItem.submenu = fileMenu
+        fileMenu.addItem(NSMenuItem(title: "Close Window", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w"))
+
+        // Edit menu (for copy/paste in text fields)
+        let editMenuItem = NSMenuItem()
+        mainMenu.addItem(editMenuItem)
+        let editMenu = NSMenu(title: "Edit")
+        editMenuItem.submenu = editMenu
+        editMenu.addItem(NSMenuItem(title: "Undo", action: Selector(("undo:")), keyEquivalent: "z"))
+        editMenu.addItem(NSMenuItem(title: "Redo", action: Selector(("redo:")), keyEquivalent: "Z"))
+        editMenu.addItem(NSMenuItem.separator())
+        editMenu.addItem(NSMenuItem(title: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x"))
+        editMenu.addItem(NSMenuItem(title: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c"))
+        editMenu.addItem(NSMenuItem(title: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v"))
+        editMenu.addItem(NSMenuItem(title: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a"))
+
+        // Window menu
+        let windowMenuItem = NSMenuItem()
+        mainMenu.addItem(windowMenuItem)
+        let windowMenu = NSMenu(title: "Window")
+        windowMenuItem.submenu = windowMenu
+        windowMenu.addItem(NSMenuItem(title: "Minimize", action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m"))
+        windowMenu.addItem(NSMenuItem(title: "Zoom", action: #selector(NSWindow.performZoom(_:)), keyEquivalent: ""))
+        windowMenu.addItem(NSMenuItem.separator())
+        windowMenu.addItem(NSMenuItem(title: "Bring All to Front", action: #selector(NSApplication.arrangeInFront(_:)), keyEquivalent: ""))
+        NSApp.windowsMenu = windowMenu
+
+        NSApp.mainMenu = mainMenu
+    }
+
+    func showMainWindow() {
+        mainWindowController?.showWindow()
+    }
+
+    // MARK: - NSWindowDelegate
+
+    func windowWillClose(_ notification: Notification) {
+        isWindowVisible = false
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        return false
+        // Don't quit if we're in headless mode (processing files via ADMProgress)
+        if launchedWithFiles || activeConversions > 0 {
+            return false
+        }
+        return true
+    }
+
+    // MARK: - About Dialog
+
+    @objc func showAbout(_ sender: Any?) {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "3.0"
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
+
+        let alert = NSAlert()
+        alert.messageText = "JessOS ADM Convert"
+        alert.informativeText = """
+            Version \(version) (Build \(build))
+
+            Converts WAV/AIFF audio to AAC (.m4a) using Apple Digital Masters encoding parameters.
+
+            256kbps AAC \u{2022} Optional SoundCheck \u{2022} Apple Silicon Native
+
+            \u{00A9} 2024 Jess Jackson
+            """
+        alert.alertStyle = .informational
+
+        if let icon = NSImage(named: "AppIcon") {
+            alert.icon = icon
+        }
+
+        alert.runModal()
+    }
+
+    @objc func checkForUpdates(_ sender: Any?) {
+        updateManager.checkForUpdates(userInitiated: true)
     }
 
     // MARK: - Dock Menu
@@ -45,8 +186,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
         let menu = NSMenu()
 
-        // App name and version at top
-        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "2.1"
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "3.0"
         let titleItem = NSMenuItem(title: "JessOS ADM Convert v\(version)", action: nil, keyEquivalent: "")
         titleItem.isEnabled = false
         menu.addItem(titleItem)
@@ -80,14 +220,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         menu.addItem(NSMenuItem.separator())
 
-        let convertItem = NSMenuItem(
-            title: "Convert Files...",
-            action: #selector(openFilePicker(_:)),
+        let showWindowItem = NSMenuItem(
+            title: "Show Window",
+            action: #selector(showMainWindowFromMenu(_:)),
             keyEquivalent: ""
         )
-        menu.addItem(convertItem)
+        menu.addItem(showWindowItem)
 
         return menu
+    }
+
+    @objc func showMainWindowFromMenu(_ sender: NSMenuItem) {
+        quitAfterNextConversion = false  // User wants to interact, don't auto-quit
+        showMainWindow()
     }
 
     @objc func selectIncludeSoundCheck(_ sender: NSMenuItem) {
@@ -102,33 +247,33 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         useOutputFolder = !useOutputFolder
     }
 
-    @objc func openFilePicker(_ sender: Any?) {
-        let panel = NSOpenPanel()
-        panel.allowsMultipleSelection = true
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = true
-
-        if panel.runModal() == .OK {
-            processFiles(panel.urls)
-        }
-    }
-
     // MARK: - File Handling (Drag & Drop, Open With)
 
     func application(_ sender: NSApplication, openFile filename: String) -> Bool {
         let url = URL(fileURLWithPath: filename)
-        let shouldQuit = quitAfterNextConversion
-        quitAfterNextConversion = false  // Only the first batch gets quit behavior
-        processFiles([url], quitWhenDone: shouldQuit)
+        handleIncomingFiles([url])
         return true
     }
 
     func application(_ sender: NSApplication, openFiles filenames: [String]) {
         let urls = filenames.map { URL(fileURLWithPath: $0) }
-        let shouldQuit = quitAfterNextConversion
-        quitAfterNextConversion = false  // Only the first batch gets quit behavior
-        processFiles(urls, quitWhenDone: shouldQuit)
+        handleIncomingFiles(urls)
         NSApp.reply(toOpenOrPrint: .success)
+    }
+
+    private func handleIncomingFiles(_ urls: [URL]) {
+        // If window is already visible, add files to the list (window mode)
+        if isWindowVisible {
+            conversionManager.addFiles(urls)
+            return
+        }
+
+        // Window not visible - this is a dock drop, use headless mode
+        // Queue files with debouncing to accumulate rapid openFile calls
+        launchedWithFiles = true
+        let shouldQuit = quitAfterNextConversion
+        quitAfterNextConversion = false
+        queueFilesForHeadless(urls, quitWhenDone: shouldQuit)
     }
 
     // MARK: - Services Handler
@@ -148,7 +293,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        // Also try NSFilenamesPboardType
         if urls.isEmpty, let filenames = pboard.propertyList(forType: NSPasteboard.PasteboardType("NSFilenamesPboardType")) as? [String] {
             urls = filenames.map { URL(fileURLWithPath: $0) }
         }
@@ -158,66 +302,52 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        let shouldQuit = quitAfterNextConversion
-        quitAfterNextConversion = false
-        processFiles(urls, quitWhenDone: shouldQuit)
+        // Treat Services the same as dock drop: headless mode, quit when done
+        launchedWithFiles = true
+        queueFilesForHeadless(urls, quitWhenDone: true)
     }
 
-    // MARK: - Processing
+    // MARK: - Processing (Headless Mode with native progress popup)
 
-    func processFiles(_ urls: [URL], quitWhenDone: Bool = false) {
+    private var headlessController: HeadlessProgressController?
+
+    // File accumulation for dock drops (macOS may call openFile multiple times)
+    private var pendingHeadlessFiles: [URL] = []
+    private var headlessDebounceWorkItem: DispatchWorkItem?
+    private var pendingQuitWhenDone = false
+
+    private func queueFilesForHeadless(_ urls: [URL], quitWhenDone: Bool) {
+        // Accumulate files
+        pendingHeadlessFiles.append(contentsOf: urls)
+        if quitWhenDone {
+            pendingQuitWhenDone = true
+        }
+
+        // Cancel previous debounce timer
+        headlessDebounceWorkItem?.cancel()
+
+        // Start new debounce timer (100ms to collect all files from rapid openFile calls)
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self = self else { return }
+            let files = self.pendingHeadlessFiles
+            let shouldQuit = self.pendingQuitWhenDone
+            self.pendingHeadlessFiles = []
+            self.pendingQuitWhenDone = false
+            self.processFilesHeadless(files, quitWhenDone: shouldQuit)
+        }
+        headlessDebounceWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1, execute: workItem)
+    }
+
+    func processFilesHeadless(_ urls: [URL], quitWhenDone: Bool = false) {
         guard !urls.isEmpty else { return }
 
-        // Get paths to bundled resources
-        let bundle = Bundle.main
-        guard let scriptPath = bundle.path(forResource: "convert", ofType: "sh", inDirectory: "Scripts"),
-              let wrapperPath = bundle.path(forResource: "run_with_progress", ofType: "sh", inDirectory: "Scripts"),
-              let progressAppPath = bundle.path(forResource: "ADMProgress", ofType: nil) else {
-            showError("Required scripts not found in app bundle")
-            return
-        }
-
-        // Build the file paths argument
-        let quotedPaths = urls.map { "'\($0.path.replacingOccurrences(of: "'", with: "'\\''"))'" }
-        let pathString = quotedPaths.joined(separator: " ")
-
-        // Determine flags based on preferences
-        let soundCheckFlag = includeSoundCheck ? "soundcheck" : "nosoundcheck"
-        let outputFolderFlag = useOutputFolder ? "usefolder" : "samefolder"
-
-        // Build and execute the command
-        let command = "\(wrapperPath.shellQuoted()) \(scriptPath.shellQuoted()) \(progressAppPath.shellQuoted()) \(parallelJobs) \(soundCheckFlag) \(outputFolderFlag) \(pathString)"
-
-        // Track active conversions
         activeConversions += 1
 
-        DispatchQueue.global(qos: .userInitiated).async {
-            let task = Process()
-            task.executableURL = URL(fileURLWithPath: "/bin/zsh")
-            task.arguments = ["-c", command]
-
-            do {
-                try task.run()
-                task.waitUntilExit()  // Wait for conversion to complete
-
-                DispatchQueue.main.async {
-                    self.activeConversions -= 1
-
-                    // If app was launched for this conversion and no other conversions active, quit
-                    if quitWhenDone && self.activeConversions == 0 {
-                        // Small delay to let progress window close gracefully
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                            NSApp.terminate(nil)
-                        }
-                    }
-                }
-            } catch {
-                DispatchQueue.main.async {
-                    self.activeConversions -= 1
-                    self.showError("Failed to start conversion: \(error.localizedDescription)")
-                }
-            }
-        }
+        // Create and start the headless progress controller
+        let controller = HeadlessProgressController()
+        headlessController = controller
+        controller.start(urls: urls, quitWhenDone: quitWhenDone)
     }
 
     func showError(_ message: String) {
@@ -238,10 +368,3 @@ extension String {
         return "'\(self.replacingOccurrences(of: "'", with: "'\\''"))'"
     }
 }
-
-// MARK: - Main Entry Point
-
-let app = NSApplication.shared
-let delegate = AppDelegate()
-app.delegate = delegate
-app.run()

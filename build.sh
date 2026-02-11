@@ -29,14 +29,37 @@ mkdir -p "$BUILD_DIR"
 mkdir -p "$APP_BUNDLE/Contents/MacOS"
 mkdir -p "$APP_BUNDLE/Contents/Resources/Scripts"
 
-# Compile Swift code
+# Rebuild ADMProgress with new styling
+echo "Compiling ADMProgress..."
+swiftc \
+    -o "$SCRIPT_DIR/Resources/ADMProgress" \
+    -target arm64-apple-macosx14.0 \
+    -sdk $(xcrun --show-sdk-path) \
+    -framework Cocoa \
+    -framework QuartzCore \
+    "$SCRIPT_DIR/ADMProgressSource/main.swift"
+
+# Compile Swift code (manual entry point with all sources)
 echo "Compiling Swift code..."
 swiftc \
     -o "$APP_BUNDLE/Contents/MacOS/$APP_NAME" \
-    -target arm64-apple-macosx11.0 \
+    -target arm64-apple-macosx14.0 \
     -sdk $(xcrun --show-sdk-path) \
     -framework Cocoa \
-    "$SCRIPT_DIR/Sources/AppDelegate.swift"
+    -framework SwiftUI \
+    -framework UniformTypeIdentifiers \
+    "$SCRIPT_DIR/Sources/main.swift" \
+    "$SCRIPT_DIR/Sources/ADMConvertApp.swift" \
+    "$SCRIPT_DIR/Sources/ContentView.swift" \
+    "$SCRIPT_DIR/Sources/ConversionManager.swift" \
+    "$SCRIPT_DIR/Sources/AppDelegate.swift" \
+    "$SCRIPT_DIR/Sources/Models/FileConversionItem.swift" \
+    "$SCRIPT_DIR/Sources/Models/AFClipModels.swift" \
+    "$SCRIPT_DIR/Sources/Views/FileListView.swift" \
+    "$SCRIPT_DIR/Sources/Views/FileRowView.swift" \
+    "$SCRIPT_DIR/Sources/Views/HeadlessProgressView.swift" \
+    "$SCRIPT_DIR/Sources/UpdateManager.swift" \
+    "$SCRIPT_DIR/Sources/Views/UpdateProgressWindow.swift"
 
 # Copy Info.plist
 echo "Copying Info.plist..."
