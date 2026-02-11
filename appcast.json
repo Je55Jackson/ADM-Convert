@@ -1,7 +1,7 @@
 {
-  "version": "3.0",
-  "build": "1",
-  "dmgURL": "https://github.com/Je55Jackson/ADM-Convert/releases/download/v3.0/JessOS.ADM.Convert.dmg",
-  "releaseNotes": "Initial release with auto-update support.",
+  "version": "3.1",
+  "build": "2",
+  "dmgURL": "https://github.com/Je55Jackson/ADM-Convert/releases/download/v3.1/JessOS.ADM.Convert.dmg",
+  "releaseNotes": "Improved update system with better error handling.",
   "minimumSystemVersion": "14.0"
 }

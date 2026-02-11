@@ -26,7 +26,10 @@ class UpdateManager: NSObject, URLSessionDownloadDelegate {
         guard !isChecking else { return }
         isChecking = true
 
-        let request = URLRequest(url: appcastURL, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 15)
+        // Append timestamp to bust GitHub CDN cache
+        var components = URLComponents(url: appcastURL, resolvingAgainstBaseURL: false)!
+        components.queryItems = [URLQueryItem(name: "t", value: "\(Int(Date().timeIntervalSince1970))")]
+        let request = URLRequest(url: components.url!, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 15)
         URLSession.shared.dataTask(with: request) { [weak self] data, _, error in
             guard let self else { return }
             defer { self.isChecking = false }
@@ -115,6 +118,17 @@ class UpdateManager: NSObject, URLSessionDownloadDelegate {
 
     func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask,
                     didFinishDownloadingTo location: URL) {
+        // Check HTTP status code
+        if let httpResponse = downloadTask.response as? HTTPURLResponse,
+           httpResponse.statusCode != 200 {
+            DispatchQueue.main.async { [weak self] in
+                self?.progressWindow?.close()
+                self?.progressWindow = nil
+                self?.showDownloadError("Server returned status \(httpResponse.statusCode).")
+            }
+            return
+        }
+
         let dmgPath = FileManager.default.temporaryDirectory.appendingPathComponent("JessOS_ADM_Update.dmg")
         try? FileManager.default.removeItem(at: dmgPath)
         do {
@@ -123,10 +137,23 @@ class UpdateManager: NSObject, URLSessionDownloadDelegate {
             DispatchQueue.main.async { [weak self] in
                 self?.progressWindow?.close()
                 self?.progressWindow = nil
-                self?.showErrorAlert()
+                self?.showDownloadError("Could not save update file.")
             }
             return
         }
+
+        // Verify file is a reasonable size (DMG should be > 100KB)
+        let fileSize = (try? FileManager.default.attributesOfItem(atPath: dmgPath.path)[.size] as? Int) ?? 0
+        guard fileSize > 100_000 else {
+            try? FileManager.default.removeItem(at: dmgPath)
+            DispatchQueue.main.async { [weak self] in
+                self?.progressWindow?.close()
+                self?.progressWindow = nil
+                self?.showDownloadError("Downloaded file is invalid (\(fileSize) bytes).")
+            }
+            return
+        }
+
         DispatchQueue.main.async { [weak self] in
             self?.progressWindow?.close()
             self?.progressWindow = nil
@@ -135,11 +162,11 @@ class UpdateManager: NSObject, URLSessionDownloadDelegate {
     }
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
-        guard error != nil else { return }
+        guard let error else { return }
         DispatchQueue.main.async { [weak self] in
             self?.progressWindow?.close()
             self?.progressWindow = nil
-            self?.showErrorAlert()
+            self?.showDownloadError(error.localizedDescription)
         }
     }
 
@@ -147,6 +174,18 @@ class UpdateManager: NSObject, URLSessionDownloadDelegate {
 
     private func installUpdate(dmgPath: URL) {
         let mountPoint = "/tmp/jessos_update_mount"
+
+        // Clean up any stale mount point from a previous attempt
+        if FileManager.default.fileExists(atPath: mountPoint) {
+            let detach = Process()
+            detach.executableURL = URL(fileURLWithPath: "/usr/bin/hdiutil")
+            detach.arguments = ["detach", mountPoint, "-force"]
+            detach.standardOutput = FileHandle.nullDevice
+            detach.standardError = FileHandle.nullDevice
+            try? detach.run()
+            detach.waitUntilExit()
+            try? FileManager.default.removeItem(atPath: mountPoint)
+        }
 
         // Mount the DMG
         let mount = Process()
@@ -159,12 +198,12 @@ class UpdateManager: NSObject, URLSessionDownloadDelegate {
             try mount.run()
             mount.waitUntilExit()
         } catch {
-            showErrorAlert()
+            showDownloadError("Could not mount the update image.")
             return
         }
 
         guard mount.terminationStatus == 0 else {
-            showErrorAlert()
+            showDownloadError("Failed to mount update image (exit code \(mount.terminationStatus)).")
             return
         }
 
@@ -176,7 +215,7 @@ class UpdateManager: NSObject, URLSessionDownloadDelegate {
             detach.executableURL = URL(fileURLWithPath: "/usr/bin/hdiutil")
             detach.arguments = ["detach", mountPoint]
             try? detach.run()
-            showErrorAlert()
+            showDownloadError("Could not find app in update image.")
             return
         }
 
@@ -199,7 +238,7 @@ class UpdateManager: NSObject, URLSessionDownloadDelegate {
             try script.write(toFile: scriptPath, atomically: true, encoding: .utf8)
             try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: scriptPath)
         } catch {
-            showErrorAlert()
+            showDownloadError("Could not prepare update installer.")
             return
         }
 
@@ -213,7 +252,7 @@ class UpdateManager: NSObject, URLSessionDownloadDelegate {
         do {
             try updater.run()
         } catch {
-            showErrorAlert()
+            showDownloadError("Could not launch update installer.")
             return
         }
 
@@ -249,6 +288,15 @@ class UpdateManager: NSObject, URLSessionDownloadDelegate {
         let alert = NSAlert()
         alert.messageText = "Update Check Failed"
         alert.informativeText = "Could not check for updates. Please check your internet connection."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
+    }
+
+    private func showDownloadError(_ detail: String) {
+        let alert = NSAlert()
+        alert.messageText = "Update Failed"
+        alert.informativeText = "Could not download or install the update.\n\n\(detail)"
         alert.alertStyle = .warning
         alert.addButton(withTitle: "OK")
         alert.runModal()
