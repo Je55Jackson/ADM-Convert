@@ -6,18 +6,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 JessOS ADM Convert is a native macOS app that converts WAV/AIFF audio files to AAC (.m4a) using Apple Digital Masters encoding parameters (256kbps AAC, optional SoundCheck loudness normalization). It replaces Apple's original x86-only ADM Droplet with an Apple Silicon native implementation.
 
-## Build Commands
+## Build / Deploy / Release
 
-```bash
-# Build, sign, notarize, and create DMG (full release build)
-./build.sh
+**IMPORTANT: Know the difference. Only "release" affects users.**
 
-# Build and deploy to /Applications for testing
-./build.sh --deploy
-```
+| Term | Command | What it does | Affects users? |
+|------|---------|-------------|----------------|
+| **Build** | `./build.sh` | Compile, sign, notarize DMG (stays in `build/`) | No |
+| **Deploy** | `./build.sh --deploy` | Build + install to `/Applications` for local testing | No |
+| **Release** | `./scripts/release.sh` | Push to GitHub, create release, update download page | **YES** |
+
+When the user says "build" or "deploy", keep everything local. Only run the release pipeline when explicitly asked to "release" or "push to users".
 
 The build script:
-1. Compiles Swift code with `swiftc` targeting arm64-apple-macosx11.0
+1. Compiles Swift code with `swiftc` targeting arm64-apple-macosx14.0
 2. Copies resources (scripts, ADMProgress, icon)
 3. Signs with Developer ID certificate (hardened runtime + timestamp)
 4. Creates DMG with `appdmg`
@@ -25,6 +27,9 @@ The build script:
 
 **Code signing identity:** `Developer ID Application: Jess Jackson (K5765CY524)`
 **Notarization profile:** `ADM-Convert-Notarization` (stored in keychain)
+
+**Download page:** `jessos.com/admconvert/` (leads stored in DynamoDB `jessos-adm-leads`)
+**Admin dashboard:** `jessos.com/admconvert/admin.html`
 
 ## Architecture
 
@@ -83,3 +88,7 @@ cp ADMProgressSource/ADMProgress Resources/ADMProgress
 ```
 
 Then run `./build.sh --deploy` to rebuild the main app.
+
+## Build Notes / README
+
+`JessOS_ADM_Convert_BUILD_NOTES.txt` doubles as the project README. When adding new version entries to the BUILD LOG section, **newest versions go on top** (reverse chronological order).

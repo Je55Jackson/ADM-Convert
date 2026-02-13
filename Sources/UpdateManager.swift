@@ -6,7 +6,8 @@ private struct Appcast: Decodable {
     let version: String
     let build: String
     let dmgURL: String
-    let releaseNotes: String
+    let releaseNotes: String              // v3.0 compat: single string
+    let releaseNotesList: [String]?       // v3.1+: structured list for new update dialog
     let minimumSystemVersion: String
 }
 
@@ -262,17 +263,100 @@ class UpdateManager: NSObject, URLSessionDownloadDelegate {
     // MARK: - Alerts
 
     private func showUpdateAlert(appcast: Appcast) {
-        let alert = NSAlert()
-        alert.messageText = "Update Available"
-        alert.informativeText = "Version \(appcast.version) is available.\n\n\(appcast.releaseNotes)"
-        alert.alertStyle = .informational
-        alert.addButton(withTitle: "Download & Install")
-        alert.addButton(withTitle: "Later")
+        let localVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0"
 
-        if alert.runModal() == .alertFirstButtonReturn {
-            guard let url = URL(string: appcast.dmgURL) else { return }
-            downloadAndInstall(from: url, version: appcast.version)
-        }
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 420, height: 320),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = "Software Update"
+        window.center()
+        window.isReleasedWhenClosed = false
+        window.level = .floating
+
+        let content = NSView(frame: NSRect(x: 0, y: 0, width: 420, height: 320))
+
+        // Title
+        let title = NSTextField(labelWithString: "JessOS ADM Convert v\(appcast.version)")
+        title.font = NSFont.systemFont(ofSize: 18, weight: .semibold)
+        title.translatesAutoresizingMaskIntoConstraints = false
+        content.addSubview(title)
+
+        // Subtitle
+        let subtitle = NSTextField(labelWithString: "You're currently running v\(localVersion)")
+        subtitle.font = NSFont.systemFont(ofSize: 12)
+        subtitle.textColor = .secondaryLabelColor
+        subtitle.translatesAutoresizingMaskIntoConstraints = false
+        content.addSubview(subtitle)
+
+        // "What's New" label
+        let whatsNewLabel = NSTextField(labelWithString: "What's New:")
+        whatsNewLabel.font = NSFont.systemFont(ofSize: 13, weight: .medium)
+        whatsNewLabel.translatesAutoresizingMaskIntoConstraints = false
+        content.addSubview(whatsNewLabel)
+
+        // Release notes: prefer structured list, fall back to single string
+        let notes = appcast.releaseNotesList ?? [appcast.releaseNotes]
+        let notesText = notes.enumerated().map { i, note in
+            "\(i + 1). \(note)"
+        }.joined(separator: "\n")
+
+        let notesLabel = NSTextField(wrappingLabelWithString: notesText)
+        notesLabel.font = NSFont.systemFont(ofSize: 13)
+        notesLabel.isSelectable = true
+        notesLabel.translatesAutoresizingMaskIntoConstraints = false
+        content.addSubview(notesLabel)
+
+        // Buttons
+        let laterButton = NSButton(title: "Later", target: nil, action: nil)
+        laterButton.bezelStyle = .rounded
+        laterButton.translatesAutoresizingMaskIntoConstraints = false
+        content.addSubview(laterButton)
+
+        let downloadButton = NSButton(title: "Download & Install", target: nil, action: nil)
+        downloadButton.bezelStyle = .rounded
+        downloadButton.keyEquivalent = "\r"
+        downloadButton.translatesAutoresizingMaskIntoConstraints = false
+        content.addSubview(downloadButton)
+
+        window.contentView = content
+
+        NSLayoutConstraint.activate([
+            title.topAnchor.constraint(equalTo: content.topAnchor, constant: 20),
+            title.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 20),
+            title.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -20),
+
+            subtitle.topAnchor.constraint(equalTo: title.bottomAnchor, constant: 4),
+            subtitle.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 20),
+
+            whatsNewLabel.topAnchor.constraint(equalTo: subtitle.bottomAnchor, constant: 16),
+            whatsNewLabel.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 20),
+
+            notesLabel.topAnchor.constraint(equalTo: whatsNewLabel.bottomAnchor, constant: 8),
+            notesLabel.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 20),
+            notesLabel.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -20),
+
+            downloadButton.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -20),
+            downloadButton.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -16),
+
+            laterButton.trailingAnchor.constraint(equalTo: downloadButton.leadingAnchor, constant: -8),
+            laterButton.centerYAnchor.constraint(equalTo: downloadButton.centerYAnchor),
+        ])
+
+        // Button actions via closures using a helper
+        let handler = UpdateAlertHandler(window: window, appcast: appcast, manager: self)
+        downloadButton.target = handler
+        downloadButton.action = #selector(UpdateAlertHandler.downloadClicked)
+        laterButton.target = handler
+        laterButton.action = #selector(UpdateAlertHandler.laterClicked)
+
+        // Prevent handler from being deallocated while window is open
+        objc_setAssociatedObject(window, "handler", handler, .OBJC_ASSOCIATION_RETAIN)
+
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     private func showUpToDateAlert(version: String) {
@@ -300,5 +384,31 @@ class UpdateManager: NSObject, URLSessionDownloadDelegate {
         alert.alertStyle = .warning
         alert.addButton(withTitle: "OK")
         alert.runModal()
+    }
+}
+
+// MARK: - Update Alert Button Handler
+
+private class UpdateAlertHandler: NSObject {
+    let window: NSWindow
+    let dmgURL: String
+    let version: String
+    weak var manager: UpdateManager?
+
+    init(window: NSWindow, appcast: Appcast, manager: UpdateManager) {
+        self.window = window
+        self.dmgURL = appcast.dmgURL
+        self.version = appcast.version
+        self.manager = manager
+    }
+
+    @objc func downloadClicked() {
+        window.close()
+        guard let url = URL(string: dmgURL) else { return }
+        manager?.downloadAndInstall(from: url, version: version)
+    }
+
+    @objc func laterClicked() {
+        window.close()
     }
 }

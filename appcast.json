@@ -1,7 +1,13 @@
 {
-  "version": "3.0",
+  "version": "3.1",
   "build": "1",
-  "dmgURL": "https://github.com/Je55Jackson/ADM-Convert/releases/download/v3.0/JessOS.ADM.Convert.dmg",
-  "releaseNotes": "First public release. Apple Silicon native ADM converter with auto-update support.",
+  "dmgURL": "https://github.com/Je55Jackson/ADM-Convert/releases/download/v3.1/JessOS.ADM.Convert.dmg",
+  "releaseNotes": "Analyze Only mode, new update dialog with changelog, M4A drop support.",
+  "releaseNotesList": [
+    "Analyze Only mode — check for clipping without saving M4A files",
+    "Two action buttons: Analyze Only and Convert & Analyze",
+    "M4A files now accepted in drop zone",
+    "New update dialog with formatted changelog"
+  ],
   "minimumSystemVersion": "14.0"
 }

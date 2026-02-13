@@ -127,7 +127,7 @@ struct DropZoneView: View {
                 .fontWeight(.medium)
                 .foregroundColor(.white)
 
-            Text("WAV, AIFF supported")
+            Text("WAV, AIFF, M4A supported")
                 .font(.subheadline)
                 .foregroundColor(.white.opacity(0.7))
         }

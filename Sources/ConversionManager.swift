@@ -1,6 +1,13 @@
 import SwiftUI
 import Combine
 
+// MARK: - Processing Mode
+
+enum ProcessingMode {
+    case convertAndAnalyze
+    case analyzeOnly
+}
+
 // MARK: - Conversion Error
 
 enum ConversionError: LocalizedError {
@@ -50,7 +57,7 @@ class ConversionManager: ObservableObject {
 
     // MARK: - Window Mode: Start Processing
 
-    func startProcessing() {
+    func startProcessing(mode: ProcessingMode = .convertAndAnalyze) {
         guard !isConverting else { return }
 
         let pendingItems = fileItems.filter {
@@ -64,7 +71,6 @@ class ConversionManager: ObservableObject {
             self.isConverting = true
         }
 
-        // Create temp directory
         try? FileManager.default.createDirectory(atPath: tempDir, withIntermediateDirectories: true)
 
         Task {
@@ -72,16 +78,15 @@ class ConversionManager: ObservableObject {
                 var runningCount = 0
 
                 for item in pendingItems {
-                    // Wait if we have max concurrent conversions
                     while runningCount >= maxConcurrentConversions {
-                        try? await Task.sleep(nanoseconds: 100_000_000) // 0.1s
+                        try? await Task.sleep(nanoseconds: 100_000_000)
                         runningCount = pendingItems.filter { $0.isProcessing }.count
                     }
 
                     runningCount += 1
 
                     group.addTask {
-                        await self.processItem(item)
+                        await self.processItem(item, mode: mode)
                     }
                 }
 
@@ -96,33 +101,38 @@ class ConversionManager: ObservableObject {
 
     // MARK: - Process Single Item
 
-    private func processItem(_ item: FileConversionItem) async {
+    private func processItem(_ item: FileConversionItem, mode: ProcessingMode) async {
         do {
             let fileToAnalyze: URL
+            var tempM4A: URL?
 
             if item.isM4A {
-                // M4A files: skip conversion, analyze directly
-                await MainActor.run {
-                    item.status = .analyzing
-                }
+                await MainActor.run { item.status = .analyzing }
                 fileToAnalyze = item.sourceURL
             } else {
-                // WAV/AIFF files: convert first
-                await MainActor.run {
-                    item.status = .converting(progress: 0.0)
-                }
+                await MainActor.run { item.status = .converting(progress: 0.0) }
 
-                let outputURL = try await convertFile(item)
+                switch mode {
+                case .convertAndAnalyze:
+                    let outputURL = try await convertToOutput(item)
+                    await MainActor.run {
+                        item.outputURL = outputURL
+                        item.status = .analyzing
+                    }
+                    fileToAnalyze = outputURL
 
-                await MainActor.run {
-                    item.outputURL = outputURL
-                    item.status = .analyzing
+                case .analyzeOnly:
+                    let tempURL = try await convertToTemp(item)
+                    tempM4A = tempURL
+                    await MainActor.run { item.status = .analyzing }
+                    fileToAnalyze = tempURL
                 }
-                fileToAnalyze = outputURL
             }
 
-            // Run afclip analysis
             let clipResult = await AFClipParser.analyzeAsync(file: fileToAnalyze)
+
+            // Clean up temp M4A after analysis
+            if let tempM4A { try? FileManager.default.removeItem(at: tempM4A) }
 
             await MainActor.run {
                 item.clipResult = clipResult
@@ -136,12 +146,11 @@ class ConversionManager: ObservableObject {
         }
     }
 
-    // MARK: - Convert File (Direct afconvert)
+    // MARK: - Convert to Output Directory
 
-    private func convertFile(_ item: FileConversionItem) async throws -> URL {
+    private func convertToOutput(_ item: FileConversionItem) async throws -> URL {
         let inputURL = item.sourceURL
 
-        // Determine output directory
         let outputDir: URL
         if useOutputFolder {
             outputDir = inputURL.deletingLastPathComponent().appendingPathComponent("M4A")
@@ -150,7 +159,6 @@ class ConversionManager: ObservableObject {
             outputDir = inputURL.deletingLastPathComponent()
         }
 
-        // Generate unique output filename
         let baseName = inputURL.deletingPathExtension().lastPathComponent
         var outputURL = outputDir.appendingPathComponent("\(baseName).m4a")
         var counter = 1
@@ -159,30 +167,37 @@ class ConversionManager: ObservableObject {
             counter += 1
         }
 
-        // Check sample rate for resampling
-        let sampleRate = await getSampleRate(for: inputURL)
+        try await convertTwoPass(item: item, input: inputURL, output: outputURL)
+        return outputURL
+    }
+
+    // MARK: - Convert to Temp (Analyze Only)
+
+    private func convertToTemp(_ item: FileConversionItem) async throws -> URL {
+        let inputURL = item.sourceURL
+        let baseName = inputURL.deletingPathExtension().lastPathComponent
+        let outputURL = URL(fileURLWithPath: "\(tempDir)/\(UUID().uuidString)_\(baseName).m4a")
+
+        try await convertTwoPass(item: item, input: inputURL, output: outputURL)
+        return outputURL
+    }
+
+    // MARK: - Two-Pass Conversion
+
+    private func convertTwoPass(item: FileConversionItem, input: URL, output: URL) async throws {
+        let sampleRate = await getSampleRate(for: input)
         let needsResample = sampleRate > 48000
 
-        // Always use SoundCheck in window mode (two-pass conversion)
-        await MainActor.run {
-            item.status = .converting(progress: 0.25)
-        }
+        await MainActor.run { item.status = .converting(progress: 0.25) }
 
-        // Pass 1: Convert to CAF with SoundCheck generation
         let cafURL = URL(fileURLWithPath: "\(tempDir)/\(UUID().uuidString).caf")
-        try await runAfconvert(pass1Arguments(input: inputURL, output: cafURL, needsResample: needsResample))
+        try await runAfconvert(pass1Arguments(input: input, output: cafURL, needsResample: needsResample))
 
-        await MainActor.run {
-            item.status = .converting(progress: 0.75)
-        }
+        await MainActor.run { item.status = .converting(progress: 0.75) }
 
-        // Pass 2: Convert CAF to AAC with SoundCheck read
-        try await runAfconvert(pass2Arguments(input: cafURL, output: outputURL))
+        try await runAfconvert(pass2Arguments(input: cafURL, output: output))
 
-        // Clean up temp CAF file
         try? FileManager.default.removeItem(at: cafURL)
-
-        return outputURL
     }
 
     // MARK: - afconvert Arguments

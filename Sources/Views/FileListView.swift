@@ -47,7 +47,7 @@ struct FileListView: View {
             }
 
             // Bottom controls
-            HStack(spacing: 16) {
+            HStack(spacing: 12) {
                 // Output folder toggle - only shown when there are files to convert (not M4A analyze-only)
                 if hasConvertibleFiles {
                     Toggle(isOn: $conversionManager.useOutputFolder) {
@@ -66,29 +66,31 @@ struct FileListView: View {
 
                 Spacer()
 
-                // Process button
-                Button(action: { conversionManager.startProcessing() }) {
-                    HStack(spacing: 6) {
-                        if conversionManager.isConverting {
-                            ProgressView()
-                                .scaleEffect(0.6)
-                                .tint(.white)
-                        }
-                        Text(buttonText)
-                            .font(.system(size: 13, weight: .semibold))
-                    }
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 8)
-                    .background(buttonBackground)
-                    .cornerRadius(16)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(Color.white.opacity(0.3), lineWidth: 1)
-                    )
+                if conversionManager.isConverting {
+                    // Single processing indicator while running
+                    actionButton(text: "Processing...", action: {}, showSpinner: true)
+                        .disabled(true)
+                } else if pendingCount == 0 && conversionManager.fileItems.count > 0 {
+                    actionButton(text: "All Done", action: {})
+                        .disabled(true)
+                } else if pendingM4ACount == pendingCount {
+                    // All M4A files — single analyze button
+                    actionButton(text: "Analyze \(pendingCount) file\(pendingCount == 1 ? "" : "s")", action: {
+                        conversionManager.startProcessing(mode: .analyzeOnly)
+                    })
+                    .disabled(pendingCount == 0)
+                } else {
+                    // WAV/AIFF files — two buttons
+                    actionButton(text: "Analyze Only", action: {
+                        conversionManager.startProcessing(mode: .analyzeOnly)
+                    })
+                    .disabled(pendingCount == 0)
+
+                    actionButton(text: "Convert & Analyze", action: {
+                        conversionManager.startProcessing(mode: .convertAndAnalyze)
+                    })
+                    .disabled(pendingCount == 0)
                 }
-                .buttonStyle(.plain)
-                .disabled(conversionManager.isConverting || pendingCount == 0)
             }
         }
         .padding(.horizontal)
@@ -118,6 +120,30 @@ struct FileListView: View {
         conversionManager.fileItems.filter { $0.isComplete }.count
     }
 
+    private func actionButton(text: String, action: @escaping () -> Void, showSpinner: Bool = false) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                if showSpinner {
+                    ProgressView()
+                        .scaleEffect(0.6)
+                        .tint(.white)
+                }
+                Text(text)
+                    .font(.system(size: 13, weight: .semibold))
+            }
+            .foregroundColor(.white)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .background(Color.white.opacity(0.25))
+            .cornerRadius(16)
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(Color.white.opacity(0.3), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
     private var headerText: String {
         if conversionManager.isConverting {
             return "\(completedCount)/\(conversionManager.fileItems.count) complete"
@@ -128,25 +154,6 @@ struct FileListView: View {
         }
     }
 
-    private var buttonText: String {
-        if conversionManager.isConverting {
-            return "Processing..."
-        } else if pendingCount == 0 && conversionManager.fileItems.count > 0 {
-            return "All Done"
-        } else if pendingM4ACount == pendingCount {
-            // All pending files are M4A - analyze only
-            return "Analyze \(pendingCount) file\(pendingCount == 1 ? "" : "s")"
-        } else {
-            return "Process & Analyze \(pendingCount) file\(pendingCount == 1 ? "" : "s")"
-        }
-    }
-
-    private var buttonBackground: Color {
-        if conversionManager.isConverting || pendingCount == 0 {
-            return Color.white.opacity(0.15)
-        }
-        return Color.white.opacity(0.25)
-    }
 }
 
 #Preview {
