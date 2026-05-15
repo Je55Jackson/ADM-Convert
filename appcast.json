@@ -2,12 +2,11 @@
   "version": "3.2",
   "build": "1",
   "dmgURL": "https://github.com/Je55Jackson/ADM-Convert/releases/download/v3.2/JessOS.ADM.Convert.dmg",
-  "releaseNotes": "Switched to the industry-standard Sparkle updater. After installing this update, future updates will use Sparkle's standard dialog.",
+  "releaseNotes": "Updater improvements and smaller app size.",
   "releaseNotesList": [
-    "Switched auto-updater to Sparkle (industry standard)",
-    "Cleaner update dialog from v3.3 onward",
-    "EdDSA signature verification on updates",
-    "Smaller app — removed ~500 lines of custom updater code"
+    "Updated auto-updater",
+    "More secure updates",
+    "Refined app size (Less Code)"
   ],
   "minimumSystemVersion": "14.0"
 }
