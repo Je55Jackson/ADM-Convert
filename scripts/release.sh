@@ -20,7 +20,8 @@ SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD_DIR="$SCRIPT_DIR/build"
 APP_NAME="JessOS ADM Convert"
 DMG_PATH="$BUILD_DIR/$APP_NAME.dmg"
-APPCAST="$SCRIPT_DIR/appcast.json"
+APPCAST_XML="$SCRIPT_DIR/appcast.xml"
+GENERATE_APPCAST="$SCRIPT_DIR/Frameworks/bin/generate_appcast"
 JESSOS_WEB="$SCRIPT_DIR/../JessOS/web/admconvert"
 CHANGELOG="$JESSOS_WEB/changelog.html"
 DEPLOY_SCRIPT="$SCRIPT_DIR/../JessOS/scripts/deploy-web.sh"
@@ -40,11 +41,10 @@ echo "=== JessOS ADM Convert Release ==="
 echo ""
 echo "  Version:    $VERSION"
 echo "  DMG:        $DMG_PATH"
-echo "  Appcast:    $APPCAST"
+echo "  Appcast:    $APPCAST_XML"
 echo "  Web DMG:    $JESSOS_WEB/JessOS-ADM-Convert.dmg"
 echo ""
 
-# Pre-flight checks
 ERRORS=0
 
 if [ ! -f "$DMG_PATH" ]; then
@@ -53,8 +53,9 @@ if [ ! -f "$DMG_PATH" ]; then
     ERRORS=$((ERRORS + 1))
 fi
 
-if [ ! -f "$APPCAST" ]; then
-    echo "ERROR: appcast.json not found."
+if [ ! -x "$GENERATE_APPCAST" ]; then
+    echo "ERROR: generate_appcast not found at $GENERATE_APPCAST"
+    echo "       Extract Sparkle's bin/ directory into Frameworks/bin/."
     ERRORS=$((ERRORS + 1))
 fi
 
@@ -64,18 +65,12 @@ if [ $ERRORS -gt 0 ]; then
     exit 1
 fi
 
-# Check appcast version matches
-APPCAST_VERSION=$(python3 -c "import json; print(json.load(open('$APPCAST'))['version'])" 2>/dev/null || echo "unknown")
-if [ "$APPCAST_VERSION" != "$VERSION" ]; then
-    echo "WARNING: appcast.json version ($APPCAST_VERSION) != Info.plist version ($VERSION)"
-    echo "         Update appcast.json before releasing."
-fi
-
 echo "This will:"
-echo "  1. Push to main branch"
-echo "  2. Create GitHub release v$VERSION with DMG"
-echo "  3. Copy DMG to download page"
-echo "  4. Deploy download page DMG to S3"
+echo "  1. Generate signed appcast.xml from the DMG"
+echo "  2. Commit appcast.xml + Info.plist and push to main"
+echo "  3. Create GitHub release v$VERSION with DMG"
+echo "  4. Copy DMG to download page"
+echo "  5. Deploy download page DMG to S3"
 echo ""
 
 if [ "$DRY_RUN" = true ]; then
@@ -90,22 +85,31 @@ if [ "$CONFIRM" != "y" ] && [ "$CONFIRM" != "Y" ]; then
 fi
 
 echo ""
-echo "Step 1: Pushing to main..."
-git -C "$SCRIPT_DIR" push origin main
+echo "Step 1: Generating signed appcast.xml..."
+"$GENERATE_APPCAST" \
+    --download-url-prefix "https://github.com/Je55Jackson/ADM-Convert/releases/download/v$VERSION/" \
+    -o "$APPCAST_XML" \
+    "$BUILD_DIR"
 
 echo ""
-echo "Step 2: Creating GitHub release v$VERSION..."
+echo "Step 2: Creating GitHub release v$VERSION (DMG live before appcast points at it)..."
 gh release create "v$VERSION" "$DMG_PATH" \
     --repo Je55Jackson/ADM-Convert \
     --title "v$VERSION" \
     --notes "JessOS ADM Convert v$VERSION"
 
 echo ""
-echo "Step 3: Copying DMG to download page..."
+echo "Step 3: Committing appcast and pushing to main..."
+git -C "$SCRIPT_DIR" add appcast.xml appcast.json Info.plist
+git -C "$SCRIPT_DIR" commit -m "Release v$VERSION" || echo "(nothing to commit)"
+git -C "$SCRIPT_DIR" push origin main
+
+echo ""
+echo "Step 4: Copying DMG to download page..."
 cp "$DMG_PATH" "$JESSOS_WEB/JessOS-ADM-Convert.dmg"
 
 echo ""
-echo "Step 4: Deploying DMG to S3..."
+echo "Step 5: Deploying DMG to S3..."
 cd "$SCRIPT_DIR/../JessOS"
 ./scripts/deploy-web.sh admconvert/JessOS-ADM-Convert.dmg
 
@@ -113,5 +117,5 @@ echo ""
 echo "=== Release v$VERSION complete ==="
 echo ""
 echo "Users will receive the update via:"
-echo "  - Auto-updater (checks appcast.json on launch)"
+echo "  - Sparkle (appcast.xml, v3.2+ installs)"
 echo "  - Download page: https://jessos.com/admconvert/"

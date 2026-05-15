@@ -1,13 +1,13 @@
 {
-  "version": "3.1",
+  "version": "3.2",
   "build": "1",
-  "dmgURL": "https://github.com/Je55Jackson/ADM-Convert/releases/download/v3.1/JessOS.ADM.Convert.dmg",
-  "releaseNotes": "Analyze Only mode, new update dialog with changelog, M4A drop support.",
+  "dmgURL": "https://github.com/Je55Jackson/ADM-Convert/releases/download/v3.2/JessOS.ADM.Convert.dmg",
+  "releaseNotes": "Switched to the industry-standard Sparkle updater. After installing this update, future updates will use Sparkle's standard dialog.",
   "releaseNotesList": [
-    "Analyze Only mode — check for clipping without saving M4A files",
-    "Two action buttons: Analyze Only and Convert & Analyze",
-    "M4A files now accepted in drop zone",
-    "New update dialog with formatted changelog"
+    "Switched auto-updater to Sparkle (industry standard)",
+    "Cleaner update dialog from v3.3 onward",
+    "EdDSA signature verification on updates",
+    "Smaller app — removed ~500 lines of custom updater code"
   ],
   "minimumSystemVersion": "14.0"
 }

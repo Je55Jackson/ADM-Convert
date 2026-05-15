@@ -1,11 +1,11 @@
 import Cocoa
+import Sparkle
 import SwiftUI
 
 class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, ObservableObject {
 
-    // Shared conversion manager
     let conversionManager = ConversionManager()
-    let updateManager = UpdateManager()
+    private let updater = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
 
     // Window visibility tracking
     @Published var isWindowVisible = false
@@ -61,11 +61,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
         DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) {
             self.quitAfterNextConversion = false
         }
-
-        // Silent update check on launch (no alerts if offline or up to date)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
-            self.updateManager.checkForUpdates(userInitiated: false)
-        }
     }
 
     // MARK: - Main Menu Setup
@@ -81,7 +76,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
 
         let appName = "JessOS ADM Convert"
         appMenu.addItem(NSMenuItem(title: "About \(appName)", action: #selector(showAbout(_:)), keyEquivalent: ""))
-        appMenu.addItem(NSMenuItem(title: "Check for Updates...", action: #selector(checkForUpdates(_:)), keyEquivalent: ""))
+
+        let updatesItem = NSMenuItem(title: "Check for Updates...", action: #selector(SPUStandardUpdaterController.checkForUpdates(_:)), keyEquivalent: "")
+        updatesItem.target = updater
+        appMenu.addItem(updatesItem)
         appMenu.addItem(NSMenuItem.separator())
 
         let servicesItem = NSMenuItem(title: "Services", action: nil, keyEquivalent: "")
@@ -175,10 +173,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
         }
 
         alert.runModal()
-    }
-
-    @objc func checkForUpdates(_ sender: Any?) {
-        updateManager.checkForUpdates(userInitiated: true)
     }
 
     // MARK: - Dock Menu

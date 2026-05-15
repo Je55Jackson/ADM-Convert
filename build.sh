@@ -8,7 +8,16 @@ APP_BUNDLE="$BUILD_DIR/$APP_NAME.app"
 DMG_NAME="$APP_NAME.dmg"
 DMG_PATH="$BUILD_DIR/$DMG_NAME"
 DMG_STAGING="$BUILD_DIR/dmg_staging"
+SIGN_ID="Developer ID Application: Jess Jackson (K5765CY524)"
+SPARKLE="$SCRIPT_DIR/Frameworks/Sparkle.framework"
 DEPLOY=false
+
+if [ ! -d "$SPARKLE" ]; then
+    echo "ERROR: Sparkle.framework not found at $SPARKLE"
+    echo "       Download from https://github.com/sparkle-project/sparkle/releases"
+    echo "       and extract into Frameworks/."
+    exit 1
+fi
 
 # Parse arguments
 for arg in "$@"; do
@@ -28,6 +37,7 @@ mkdir -p "$BUILD_DIR"
 # Create app bundle structure
 mkdir -p "$APP_BUNDLE/Contents/MacOS"
 mkdir -p "$APP_BUNDLE/Contents/Resources/Scripts"
+mkdir -p "$APP_BUNDLE/Contents/Frameworks"
 
 # Rebuild ADMProgress with new styling
 echo "Compiling ADMProgress..."
@@ -45,9 +55,12 @@ swiftc \
     -o "$APP_BUNDLE/Contents/MacOS/$APP_NAME" \
     -target arm64-apple-macosx14.0 \
     -sdk $(xcrun --show-sdk-path) \
+    -F "$SCRIPT_DIR/Frameworks" \
     -framework Cocoa \
     -framework SwiftUI \
     -framework UniformTypeIdentifiers \
+    -framework Sparkle \
+    -Xlinker -rpath -Xlinker "@executable_path/../Frameworks" \
     "$SCRIPT_DIR/Sources/main.swift" \
     "$SCRIPT_DIR/Sources/ADMConvertApp.swift" \
     "$SCRIPT_DIR/Sources/ContentView.swift" \
@@ -57,9 +70,7 @@ swiftc \
     "$SCRIPT_DIR/Sources/Models/AFClipModels.swift" \
     "$SCRIPT_DIR/Sources/Views/FileListView.swift" \
     "$SCRIPT_DIR/Sources/Views/FileRowView.swift" \
-    "$SCRIPT_DIR/Sources/Views/HeadlessProgressView.swift" \
-    "$SCRIPT_DIR/Sources/UpdateManager.swift" \
-    "$SCRIPT_DIR/Sources/Views/UpdateProgressWindow.swift"
+    "$SCRIPT_DIR/Sources/Views/HeadlessProgressView.swift"
 
 # Copy Info.plist
 echo "Copying Info.plist..."
@@ -79,16 +90,46 @@ cp "$SCRIPT_DIR/Resources/ADMProgress" "$APP_BUNDLE/Contents/Resources/"
 echo "Copying icon..."
 cp "$SCRIPT_DIR/Resources/AppIcon.icns" "$APP_BUNDLE/Contents/Resources/"
 
+# Copy Sparkle.framework
+echo "Copying Sparkle.framework..."
+cp -R "$SPARKLE" "$APP_BUNDLE/Contents/Frameworks/"
+
 # Create PkgInfo
 echo "APPL????" > "$APP_BUNDLE/Contents/PkgInfo"
 
 # Make the app executable
 chmod +x "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
 
-# Code sign with Developer ID certificate (hardened runtime + timestamp for notarization)
-echo "Code signing app..."
-codesign --force --options runtime --timestamp --sign "Developer ID Application: Jess Jackson (K5765CY524)" "$APP_BUNDLE/Contents/Resources/ADMProgress"
-codesign --force --deep --options runtime --timestamp --sign "Developer ID Application: Jess Jackson (K5765CY524)" "$APP_BUNDLE"
+# Code sign — inside-out. Nested helpers first, then framework, then app.
+# Hardened runtime + secure timestamp on everything for notarization.
+echo "Code signing nested helpers..."
+EMBEDDED_SPARKLE="$APP_BUNDLE/Contents/Frameworks/Sparkle.framework"
+# Use the concrete versioned dir; Versions/Current is a symlink and find won't descend it.
+SPARKLE_VERSION_DIR="$EMBEDDED_SPARKLE/Versions/B"
+
+# Sign every nested bundle (.xpc, .app) inside the framework, deepest first.
+find "$SPARKLE_VERSION_DIR" -depth -type d \( -name "*.xpc" -o -name "*.app" \) -print0 \
+    | xargs -0 -I {} codesign --force --options runtime --timestamp --sign "$SIGN_ID" "{}"
+
+# Sign loose Mach-O helpers (Autoupdate, fileop) at the framework root.
+for helper in Autoupdate fileop; do
+    if [ -f "$SPARKLE_VERSION_DIR/$helper" ]; then
+        codesign --force --options runtime --timestamp --sign "$SIGN_ID" "$SPARKLE_VERSION_DIR/$helper"
+    fi
+done
+
+echo "Code signing Sparkle.framework..."
+codesign --force --options runtime --timestamp --sign "$SIGN_ID" "$EMBEDDED_SPARKLE"
+
+echo "Code signing ADMProgress..."
+codesign --force --options runtime --timestamp --sign "$SIGN_ID" "$APP_BUNDLE/Contents/Resources/ADMProgress"
+
+echo "Code signing app bundle..."
+codesign --force --options runtime --timestamp --sign "$SIGN_ID" "$APP_BUNDLE"
+
+# Verify all signatures and entitlements before notarization to fail fast locally.
+echo "Verifying signatures..."
+codesign --verify --deep --strict --verbose=2 "$APP_BUNDLE"
 
 # Create styled DMG using appdmg
 echo "Creating DMG..."
