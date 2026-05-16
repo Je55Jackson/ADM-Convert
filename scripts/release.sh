@@ -140,13 +140,15 @@ git -C "$SCRIPT_DIR" commit -m "Release v$VERSION" || echo "(nothing to commit)"
 git -C "$SCRIPT_DIR" push origin main
 
 echo ""
-echo "Step 4: Copying DMG to download page..."
+echo "Step 4: Copying DMG + bumping version.json on download page..."
 cp "$DOTTED_DMG_PATH" "$JESSOS_WEB/JessOS-ADM-Convert.dmg"
+printf '{\n  "version": "%s"\n}\n' "$VERSION" > "$JESSOS_WEB/version.json"
 
 echo ""
-echo "Step 5: Deploying DMG to S3..."
+echo "Step 5: Deploying DMG + version.json to S3..."
 cd "$SCRIPT_DIR/../JessOS"
 ./scripts/deploy-web.sh admconvert/JessOS-ADM-Convert.dmg
+./scripts/deploy-web.sh admconvert/version.json
 
 echo ""
 echo "=== Release v$VERSION complete ==="
