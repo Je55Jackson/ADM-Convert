@@ -4,48 +4,20 @@
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
-	<key>CFBundleExecutable</key>
-	<string>JessOS ADM Convert</string>
-	<key>CFBundleIconFile</key>
-	<string>AppIcon</string>
-	<key>CFBundleIconName</key>
-	<string>AppIcon</string>
-	<key>CFBundleIdentifier</key>
-	<string>com.jessos.adm-convert</string>
-	<key>CFBundleInfoDictionaryVersion</key>
-	<string>6.0</string>
-	<key>CFBundleName</key>
-	<string>JessOS ADM Convert</string>
-	<key>CFBundlePackageType</key>
-	<string>APPL</string>
-	<key>CFBundleShortVersionString</key>
-	<string>3.2</string>
-	<key>CFBundleVersion</key>
-	<string>1</string>
-	<key>LSMinimumSystemVersion</key>
-	<string>14.0</string>
-	<key>LSUIElement</key>
-	<false/>
-	<key>NSHighResolutionCapable</key>
-	<true/>
-	<key>NSSupportsAutomaticTermination</key>
-	<true/>
-	<key>NSSupportsSuddenTermination</key>
-	<true/>
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>
+			<key>CFBundleTypeExtensions</key>
+			<array>
+				<string>wav</string>
+				<string>wave</string>
+			</array>
 			<key>CFBundleTypeName</key>
 			<string>WAV Audio</string>
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
 			<key>LSHandlerRank</key>
 			<string>Alternate</string>
-			<key>CFBundleTypeExtensions</key>
-			<array>
-				<string>wav</string>
-				<string>wave</string>
-			</array>
 			<key>LSItemContentTypes</key>
 			<array>
 				<string>com.microsoft.waveform-audio</string>
@@ -53,18 +25,18 @@
 			</array>
 		</dict>
 		<dict>
-			<key>CFBundleTypeName</key>
-			<string>AIFF Audio</string>
-			<key>CFBundleTypeRole</key>
-			<string>Editor</string>
-			<key>LSHandlerRank</key>
-			<string>Alternate</string>
 			<key>CFBundleTypeExtensions</key>
 			<array>
 				<string>aif</string>
 				<string>aiff</string>
 				<string>aifc</string>
 			</array>
+			<key>CFBundleTypeName</key>
+			<string>AIFF Audio</string>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
 			<key>LSItemContentTypes</key>
 			<array>
 				<string>public.aiff-audio</string>
@@ -84,6 +56,32 @@
 			</array>
 		</dict>
 	</array>
+	<key>CFBundleExecutable</key>
+	<string>JessOS ADM Convert</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+	<key>CFBundleIconName</key>
+	<string>AppIcon</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.jessos.adm-convert</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>JessOS ADM Convert</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>3.2.1</string>
+	<key>CFBundleVersion</key>
+	<string>2</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>14.0</string>
+	<key>LSUIElement</key>
+	<false/>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>This app needs to control other applications for audio conversion.</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
 	<key>NSServices</key>
 	<array>
 		<dict>
@@ -101,11 +99,6 @@
 				<key>NSTextContent</key>
 				<string>FilePath</string>
 			</dict>
-			<key>NSSendTypes</key>
-			<array>
-				<string>NSFilenamesPboardType</string>
-				<string>public.file-url</string>
-			</array>
 			<key>NSSendFileTypes</key>
 			<array>
 				<string>public.audio</string>
@@ -113,19 +106,26 @@
 				<string>public.aiff-audio</string>
 				<string>public.folder</string>
 			</array>
+			<key>NSSendTypes</key>
+			<array>
+				<string>NSFilenamesPboardType</string>
+				<string>public.file-url</string>
+			</array>
 		</dict>
 	</array>
-	<key>NSAppleEventsUsageDescription</key>
-	<string>This app needs to control other applications for audio conversion.</string>
+	<key>NSSupportsAutomaticTermination</key>
+	<true/>
+	<key>NSSupportsSuddenTermination</key>
+	<true/>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUEnableInstallerLauncherService</key>
+	<true/>
 	<key>SUFeedURL</key>
 	<string>https://raw.githubusercontent.com/Je55Jackson/ADM-Convert/main/appcast.xml</string>
 	<key>SUPublicEDKey</key>
 	<string>Ia1YC2N9mrY6fUXWKfOxvLCEGaB2Gv3tXkc1osezFSI=</string>
-	<key>SUEnableAutomaticChecks</key>
-	<true/>
 	<key>SUScheduledCheckInterval</key>
 	<integer>86400</integer>
-	<key>SUEnableInstallerLauncherService</key>
-	<true/>
 </dict>
 </plist>
