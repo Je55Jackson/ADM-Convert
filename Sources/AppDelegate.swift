@@ -61,6 +61,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
         DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) {
             self.quitAfterNextConversion = false
         }
+
+        // Silent update check shortly after launch. Sparkle bypasses its 24h
+        // throttle for this call but still respects the user's auto-check
+        // preference — only shows UI if an update is actually available.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+            self.updater.updater.checkForUpdatesInBackground()
+        }
     }
 
     // MARK: - Main Menu Setup
