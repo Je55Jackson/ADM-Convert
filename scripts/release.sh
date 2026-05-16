@@ -140,7 +140,7 @@ git -C "$SCRIPT_DIR" push origin main
 
 echo ""
 echo "Step 4: Copying DMG to download page..."
-cp "$DMG_PATH" "$JESSOS_WEB/JessOS-ADM-Convert.dmg"
+cp "$DOTTED_DMG_PATH" "$JESSOS_WEB/JessOS-ADM-Convert.dmg"
 
 echo ""
 echo "Step 5: Deploying DMG to S3..."
