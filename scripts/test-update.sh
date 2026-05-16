@@ -23,6 +23,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 BUNDLE_ID="com.jessos.adm-convert"
 INFO_PLIST="$SCRIPT_DIR/Info.plist"
 LOW_VERSION="${LOW_VERSION:-3.0}"
+LOW_BUILD="${LOW_BUILD:-0}"
 
 if [ "$1" = "restore" ]; then
     echo "Rebuilding + deploying real notarized v3.2..."
@@ -31,13 +32,15 @@ if [ "$1" = "restore" ]; then
 fi
 
 REAL_VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$INFO_PLIST")
-echo "Current Info.plist version: $REAL_VERSION"
-echo "Building a test copy at lowered version $LOW_VERSION..."
+REAL_BUILD=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$INFO_PLIST")
+echo "Current Info.plist: short=$REAL_VERSION build=$REAL_BUILD"
+echo "Building test copy at short=$LOW_VERSION build=$LOW_BUILD (Sparkle compares CFBundleVersion)..."
 
 # Restore the plist whether the build succeeds, fails, or is interrupted.
-trap '/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $REAL_VERSION" "$INFO_PLIST"' EXIT
+trap '/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $REAL_VERSION" "$INFO_PLIST"; /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $REAL_BUILD" "$INFO_PLIST"' EXIT
 
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $LOW_VERSION" "$INFO_PLIST"
+/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $LOW_BUILD" "$INFO_PLIST"
 "$SCRIPT_DIR/build.sh" --deploy --fast
 
 # Bypass Sparkle's 24h check throttle so the next launch checks immediately.

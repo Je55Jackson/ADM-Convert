@@ -34,12 +34,12 @@ for arg in "$@"; do
 done
 
 # Read version from Info.plist
-VERSION=$(defaults read "$SCRIPT_DIR/Info.plist" CFBundleShortVersionString 2>/dev/null || \
-    /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$SCRIPT_DIR/Info.plist")
+VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$SCRIPT_DIR/Info.plist")
+BUILD_NUMBER=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$SCRIPT_DIR/Info.plist")
 
 echo "=== JessOS ADM Convert Release ==="
 echo ""
-echo "  Version:    $VERSION"
+echo "  Version:    $VERSION (build $BUILD_NUMBER)"
 echo "  DMG:        $DMG_PATH"
 echo "  Appcast:    $APPCAST_XML"
 echo "  Web DMG:    $JESSOS_WEB/JessOS-ADM-Convert.dmg"
@@ -57,6 +57,20 @@ if [ ! -x "$GENERATE_APPCAST" ]; then
     echo "ERROR: generate_appcast not found at $GENERATE_APPCAST"
     echo "       Extract Sparkle's bin/ directory into Frameworks/bin/."
     ERRORS=$((ERRORS + 1))
+fi
+
+# Sparkle compares CFBundleVersion (build number), not CFBundleShortVersionString.
+# Refuse to ship a release whose build number is <= what's already in appcast.xml,
+# because existing users would never see the update.
+if [ -f "$APPCAST_XML" ]; then
+    LAST_BUILD=$(grep -oE '<sparkle:version>[0-9]+</sparkle:version>' "$APPCAST_XML" \
+        | grep -oE '[0-9]+' | sort -rn | head -1)
+    if [ -n "$LAST_BUILD" ] && [ "$BUILD_NUMBER" -le "$LAST_BUILD" ]; then
+        echo "ERROR: CFBundleVersion is $BUILD_NUMBER but last published build is $LAST_BUILD."
+        echo "       Sparkle compares CFBundleVersion; users won't see this as an update."
+        echo "       Bump CFBundleVersion in Info.plist (to at least $((LAST_BUILD + 1))) and re-run ./build.sh."
+        ERRORS=$((ERRORS + 1))
+    fi
 fi
 
 if [ $ERRORS -gt 0 ]; then

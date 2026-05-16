@@ -94,6 +94,8 @@ The app uses [Sparkle 2](https://sparkle-project.org) for auto-updates (v3.2+). 
 
 **Release flow:** `./build.sh` embeds + signs Sparkle.framework inside-out; `./scripts/release.sh` runs `generate_appcast` against `build/` to produce a signed `appcast.xml`, then commits and pushes.
 
+**⚠️ Critical: bump `CFBundleVersion` every release.** Sparkle uses `CFBundleVersion` (build number) to compare versions, NOT `CFBundleShortVersionString` (user-facing version). If two releases share the same `CFBundleVersion`, Sparkle treats them as identical and existing users will never see the update offer. `release.sh` has a pre-flight check that refuses to ship if the new build number is ≤ the last one in `appcast.xml`. Bump rule: `CFBundleVersion` is a monotonically-increasing integer — v3.2 used `1`, v3.3 must use `2` (or higher), v3.4 must use `3`, etc.
+
 **Testing updates locally (following Sparkle's official guidance):** `./scripts/test-update.sh` builds a non-notarized copy of the app with `CFBundleShortVersionString` temporarily lowered (default `3.0`), deploys it to `/Applications`, and clears Sparkle's `SULastCheckTime` so the next launch checks immediately. The production `appcast.xml` on GitHub serves the "new" version — your installed app sees the real published v3.2 and offers the real signed DMG. Per Sparkle docs, the update permission prompt fires on the **second launch**, so: launch, quit, launch again — or use App menu → Check for Updates… to force a check. Restore with `./scripts/test-update.sh restore` (rebuilds + notarizes real v3.2). The `--fast` flag on `build.sh` skips DMG/notarization for local-only builds.
 
 ## Rebuilding ADMProgress
