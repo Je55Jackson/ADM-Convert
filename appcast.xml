@@ -9,6 +9,14 @@
             <sparkle:shortVersionString>3.2</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description><![CDATA[
+                <h2>Version 3.2</h2>
+                <ul>
+                    <li>Updated auto-updater</li>
+                    <li>More secure updates</li>
+                    <li>Refined app size (Less Code)</li>
+                </ul>
+            ]]></description>
             <enclosure url="https://github.com/Je55Jackson/ADM-Convert/releases/download/v3.2/JessOS%20ADM%20Convert.dmg" length="6060655" type="application/octet-stream" sparkle:edSignature="PNH2vx1TyHJDE80Gowf/v5rbqwPsaIbCvquaSnMagPuldOowWtk4Pp8btRdU2f2H1IOfgZFQFIkVYKnLenFBBA=="/>
         </item>
     </channel>

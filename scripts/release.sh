@@ -100,6 +100,17 @@ fi
 
 echo ""
 echo "Step 1: Generating signed appcast.xml..."
+
+# generate_appcast picks up release notes from "<App Name> <version>.html"
+# placed next to the DMG. Source them from release-notes/<version>.html.
+NOTES_SRC="$SCRIPT_DIR/release-notes/$VERSION.html"
+if [ -f "$NOTES_SRC" ]; then
+    cp "$NOTES_SRC" "$BUILD_DIR/$APP_NAME $VERSION.html"
+    echo "  Including notes from $NOTES_SRC"
+else
+    echo "  WARNING: No release-notes/$VERSION.html — appcast description will be empty."
+fi
+
 "$GENERATE_APPCAST" \
     --download-url-prefix "https://github.com/Je55Jackson/ADM-Convert/releases/download/v$VERSION/" \
     -o "$APPCAST_XML" \
