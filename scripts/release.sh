@@ -101,11 +101,20 @@ fi
 echo ""
 echo "Step 1: Generating signed appcast.xml..."
 
-# generate_appcast picks up release notes from "<App Name> <version>.html"
+# GitHub renames release asset filenames: spaces become dots. Rename the
+# local DMG to match BEFORE generate_appcast scans it, so the URL it embeds
+# in appcast.xml matches what GitHub will serve.
+DOTTED_DMG_NAME="${APP_NAME// /.}.dmg"
+DOTTED_DMG_PATH="$BUILD_DIR/$DOTTED_DMG_NAME"
+if [ -f "$DMG_PATH" ] && [ "$DMG_PATH" != "$DOTTED_DMG_PATH" ]; then
+    mv "$DMG_PATH" "$DOTTED_DMG_PATH"
+fi
+
+# generate_appcast picks up release notes from "<dmg-basename> <version>.html"
 # placed next to the DMG. Source them from release-notes/<version>.html.
 NOTES_SRC="$SCRIPT_DIR/release-notes/$VERSION.html"
 if [ -f "$NOTES_SRC" ]; then
-    cp "$NOTES_SRC" "$BUILD_DIR/$APP_NAME $VERSION.html"
+    cp "$NOTES_SRC" "$BUILD_DIR/${DOTTED_DMG_NAME%.dmg} $VERSION.html"
     echo "  Including notes from $NOTES_SRC"
 else
     echo "  WARNING: No release-notes/$VERSION.html — appcast description will be empty."
@@ -118,7 +127,7 @@ fi
 
 echo ""
 echo "Step 2: Creating GitHub release v$VERSION (DMG live before appcast points at it)..."
-gh release create "v$VERSION" "$DMG_PATH" \
+gh release create "v$VERSION" "$DOTTED_DMG_PATH" \
     --repo Je55Jackson/ADM-Convert \
     --title "v$VERSION" \
     --notes "JessOS ADM Convert v$VERSION"
