@@ -1,7 +1,7 @@
 {
-  "version": "3.2",
-  "build": "1",
-  "dmgURL": "https://github.com/Je55Jackson/ADM-Convert/releases/download/v3.2/JessOS.ADM.Convert.dmg",
+  "version": "3.2.1",
+  "build": "2",
+  "dmgURL": "https://github.com/Je55Jackson/ADM-Convert/releases/download/v3.2.1/JessOS.ADM.Convert.dmg",
   "releaseNotes": "Updater improvements and smaller app size.",
   "releaseNotesList": [
     "Updated auto-updater",
