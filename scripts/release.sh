@@ -110,12 +110,13 @@ if [ -f "$DMG_PATH" ] && [ "$DMG_PATH" != "$DOTTED_DMG_PATH" ]; then
     mv "$DMG_PATH" "$DOTTED_DMG_PATH"
 fi
 
-# generate_appcast picks up release notes from "<dmg-basename> <version>.html"
-# placed next to the DMG. Source them from release-notes/<version>.html.
+# generate_appcast picks up release notes from a .html file with the same
+# basename as the DMG. Source from release-notes/<version>.html.
 NOTES_SRC="$SCRIPT_DIR/release-notes/$VERSION.html"
+NOTES_DEST="$BUILD_DIR/${DOTTED_DMG_NAME%.dmg}.html"
 if [ -f "$NOTES_SRC" ]; then
-    cp "$NOTES_SRC" "$BUILD_DIR/${DOTTED_DMG_NAME%.dmg} $VERSION.html"
-    echo "  Including notes from $NOTES_SRC"
+    cp "$NOTES_SRC" "$NOTES_DEST"
+    echo "  Including notes from $NOTES_SRC -> $NOTES_DEST"
 else
     echo "  WARNING: No release-notes/$VERSION.html — appcast description will be empty."
 fi
