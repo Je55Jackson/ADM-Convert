@@ -11,6 +11,7 @@ DMG_STAGING="$BUILD_DIR/dmg_staging"
 SIGN_ID="Developer ID Application: Jess Jackson (K5765CY524)"
 SPARKLE="$SCRIPT_DIR/Frameworks/Sparkle.framework"
 DEPLOY=false
+FAST=false
 
 if [ ! -d "$SPARKLE" ]; then
     echo "ERROR: Sparkle.framework not found at $SPARKLE"
@@ -24,6 +25,9 @@ for arg in "$@"; do
     case $arg in
         --deploy)
             DEPLOY=true
+            ;;
+        --fast)
+            FAST=true
             ;;
     esac
 done
@@ -131,24 +135,32 @@ codesign --force --options runtime --timestamp --sign "$SIGN_ID" "$APP_BUNDLE"
 echo "Verifying signatures..."
 codesign --verify --deep --strict --verbose=2 "$APP_BUNDLE"
 
-# Create styled DMG using appdmg
-echo "Creating DMG..."
-rm -f "$DMG_PATH"
-appdmg "$SCRIPT_DIR/appdmg.json" "$DMG_PATH"
+if [ "$FAST" = true ]; then
+    echo ""
+    echo "Fast build: skipping DMG creation + notarization (local testing only)."
+    echo ""
+    echo "Build complete!"
+    echo "  App: $APP_BUNDLE"
+else
+    # Create styled DMG using appdmg
+    echo "Creating DMG..."
+    rm -f "$DMG_PATH"
+    appdmg "$SCRIPT_DIR/appdmg.json" "$DMG_PATH"
 
-# Notarize the DMG
-echo ""
-echo "Notarizing DMG (this may take a few minutes)..."
-xcrun notarytool submit "$DMG_PATH" --keychain-profile "ADM-Convert-Notarization" --wait
+    # Notarize the DMG
+    echo ""
+    echo "Notarizing DMG (this may take a few minutes)..."
+    xcrun notarytool submit "$DMG_PATH" --keychain-profile "ADM-Convert-Notarization" --wait
 
-# Staple the notarization ticket to the DMG
-echo "Stapling notarization ticket..."
-xcrun stapler staple "$DMG_PATH"
+    # Staple the notarization ticket to the DMG
+    echo "Stapling notarization ticket..."
+    xcrun stapler staple "$DMG_PATH"
 
-echo ""
-echo "Build complete!"
-echo "  App: $APP_BUNDLE"
-echo "  DMG: $DMG_PATH"
+    echo ""
+    echo "Build complete!"
+    echo "  App: $APP_BUNDLE"
+    echo "  DMG: $DMG_PATH"
+fi
 
 # Deploy to /Applications if requested
 if [ "$DEPLOY" = true ]; then

@@ -1,104 +1,63 @@
 #!/bin/bash
 # scripts/test-update.sh
-# Spoof a Sparkle update locally to preview the update dialog without shipping.
+# Test Sparkle's update flow following the official guidance at
+# https://sparkle-project.org/documentation/#test-sparkle-out
+#
+# Builds a "low version" copy of the app (CFBundleShortVersionString set to
+# 3.0 by default), signs it, installs it to /Applications, and clears Sparkle's
+# last-check timer so the next launch checks immediately. The production
+# appcast.xml on GitHub serves the "new" version — your installed app sees the
+# real published v3.2 (or whatever is current) and offers the real DMG.
 #
 # Usage:
-#   ./scripts/test-update.sh           # set up the fake feed + override
-#   ./scripts/test-update.sh revert    # restore production feed
+#   ./scripts/test-update.sh           # install low-version test build
+#   ./scripts/test-update.sh restore   # rebuild + deploy real notarized v3.2
 #
-# How it works:
-#   1. Copies the current build/JessOS ADM Convert.dmg to /tmp/jessos-test-update/
-#   2. Signs it with the EdDSA key from your Keychain
-#   3. Writes a fake appcast.xml claiming version 9.9.9
-#   4. Overrides SUFeedURL in the app's UserDefaults so this machine reads the
-#      local appcast instead of the live GitHub one. Other users are unaffected.
-#   5. Clears any "skipped version" + last-check throttle so the dialog appears.
+# Sparkle defers the auto-check permission prompt until the SECOND launch.
+# So after this script runs: launch the app, quit, launch again — then the
+# update offer should appear. Or use App menu -> Check for Updates... at any time.
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 BUNDLE_ID="com.jessos.adm-convert"
-DMG_PATH="$SCRIPT_DIR/build/JessOS ADM Convert.dmg"
-SIGN_UPDATE="$SCRIPT_DIR/Frameworks/bin/sign_update"
-TEST_DIR="/tmp/jessos-test-update"
-TEST_DMG="$TEST_DIR/JessOS ADM Convert.dmg"
-TEST_APPCAST="$TEST_DIR/test-appcast.xml"
-TEST_VERSION="9.9.9"
-TEST_BUILD="9999"
+INFO_PLIST="$SCRIPT_DIR/Info.plist"
+LOW_VERSION="${LOW_VERSION:-3.0}"
 
-if [ "$1" = "revert" ]; then
-    echo "Reverting test setup..."
-    defaults delete "$BUNDLE_ID" SUFeedURL 2>/dev/null || true
-    defaults delete "$BUNDLE_ID" SUSkippedVersion 2>/dev/null || true
-    defaults delete "$BUNDLE_ID" SULastCheckTime 2>/dev/null || true
-    rm -rf "$TEST_DIR"
-    echo "Done. The app now reads the production appcast on next launch."
+if [ "$1" = "restore" ]; then
+    echo "Rebuilding + deploying real notarized v3.2..."
+    "$SCRIPT_DIR/build.sh" --deploy
     exit 0
 fi
 
-if [ ! -f "$DMG_PATH" ]; then
-    echo "ERROR: DMG not found at $DMG_PATH"
-    echo "       Run ./build.sh first."
-    exit 1
-fi
+REAL_VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$INFO_PLIST")
+echo "Current Info.plist version: $REAL_VERSION"
+echo "Building a test copy at lowered version $LOW_VERSION..."
 
-if [ ! -x "$SIGN_UPDATE" ]; then
-    echo "ERROR: sign_update not found at $SIGN_UPDATE"
-    exit 1
-fi
+# Restore the plist whether the build succeeds, fails, or is interrupted.
+trap '/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $REAL_VERSION" "$INFO_PLIST"' EXIT
 
-mkdir -p "$TEST_DIR"
-cp "$DMG_PATH" "$TEST_DMG"
+/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $LOW_VERSION" "$INFO_PLIST"
+"$SCRIPT_DIR/build.sh" --deploy --fast
 
-echo "Signing test DMG with your EdDSA key (Keychain may prompt)..."
-SIG_LINE=$("$SIGN_UPDATE" "$TEST_DMG")
-ED_SIG=$(echo "$SIG_LINE" | sed -E 's/.*sparkle:edSignature="([^"]+)".*/\1/')
-LENGTH=$(echo "$SIG_LINE" | sed -E 's/.*length="([^"]+)".*/\1/')
-
-# URL-encode the space in the DMG filename for the file:// URL.
-DMG_URL="file://${TEST_DMG// /%20}"
-PUB_DATE=$(date -u +"%a, %d %b %Y %H:%M:%S +0000")
-
-cat > "$TEST_APPCAST" <<EOF
-<?xml version="1.0" standalone="yes"?>
-<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
-    <channel>
-        <title>JessOS ADM Convert (TEST)</title>
-        <item>
-            <title>Version $TEST_VERSION</title>
-            <pubDate>$PUB_DATE</pubDate>
-            <sparkle:version>$TEST_BUILD</sparkle:version>
-            <sparkle:shortVersionString>$TEST_VERSION</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <description><![CDATA[
-                <h2>Version $TEST_VERSION (Test)</h2>
-                <p>This is a local-only test entry. The "update" is just a copy of your current v3.2 DMG.</p>
-                <ul>
-                    <li>Faster converter</li>
-                    <li>Bug fixes</li>
-                    <li>Small UI polish</li>
-                </ul>
-            ]]></description>
-            <enclosure url="$DMG_URL" length="$LENGTH" type="application/octet-stream" sparkle:edSignature="$ED_SIG"/>
-        </item>
-    </channel>
-</rss>
-EOF
-
-defaults write "$BUNDLE_ID" SUFeedURL "file://$TEST_APPCAST"
-defaults delete "$BUNDLE_ID" SUSkippedVersion 2>/dev/null || true
+# Bypass Sparkle's 24h check throttle so the next launch checks immediately.
 defaults delete "$BUNDLE_ID" SULastCheckTime 2>/dev/null || true
+defaults delete "$BUNDLE_ID" SUSkippedVersion 2>/dev/null || true
 
 echo ""
-echo "Test setup complete."
-echo "  Fake version:  $TEST_VERSION"
-echo "  Feed URL:      file://$TEST_APPCAST"
+echo "Test build deployed at v$LOW_VERSION."
+echo "Info.plist already restored to $REAL_VERSION."
 echo ""
-echo "Next steps:"
-echo "  1. Launch JessOS ADM Convert (or quit + relaunch if already open)"
-echo "  2. App menu -> Check for Updates..."
-echo "  3. You'll see Sparkle's standard dialog offering $TEST_VERSION"
-echo "  4. Clicking 'Install Update' reinstalls v3.2 over itself (safe)"
+echo "Next steps (per Sparkle's official test flow):"
+echo "  1. Launch JessOS ADM Convert (first launch — Sparkle is silent here)"
+echo "  2. Quit it"
+echo "  3. Launch again (second launch — Sparkle's update permission prompt fires)"
+echo "  4. Accept, and the update to v$REAL_VERSION should be offered"
 echo ""
-echo "To revert:"
-echo "  ./scripts/test-update.sh revert"
+echo "Or skip the wait and manually invoke App menu -> Check for Updates..."
+echo ""
+echo "Tail Sparkle's logs live (separate terminal):"
+echo "  log stream --predicate 'subsystem == \"org.sparkle-project.Sparkle\"' --info"
+echo ""
+echo "Restore real notarized v$REAL_VERSION when done:"
+echo "  ./scripts/test-update.sh restore"

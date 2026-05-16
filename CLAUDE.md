@@ -94,7 +94,7 @@ The app uses [Sparkle 2](https://sparkle-project.org) for auto-updates (v3.2+). 
 
 **Release flow:** `./build.sh` embeds + signs Sparkle.framework inside-out; `./scripts/release.sh` runs `generate_appcast` against `build/` to produce a signed `appcast.xml`, then commits and pushes.
 
-**Previewing the update dialog without shipping:** `./scripts/test-update.sh` spoofs a v9.9.9 update locally — it signs a copy of the current DMG, writes a fake `appcast.xml` to `/tmp/jessos-test-update/`, and overrides `SUFeedURL` via `defaults write com.jessos.adm-convert SUFeedURL …` so only your machine sees it. Run, then App menu → Check for Updates… to see Sparkle's standard dialog. Revert with `./scripts/test-update.sh revert`. Production users are never affected because the override lives in your local UserDefaults only.
+**Testing updates locally (following Sparkle's official guidance):** `./scripts/test-update.sh` builds a non-notarized copy of the app with `CFBundleShortVersionString` temporarily lowered (default `3.0`), deploys it to `/Applications`, and clears Sparkle's `SULastCheckTime` so the next launch checks immediately. The production `appcast.xml` on GitHub serves the "new" version — your installed app sees the real published v3.2 and offers the real signed DMG. Per Sparkle docs, the update permission prompt fires on the **second launch**, so: launch, quit, launch again — or use App menu → Check for Updates… to force a check. Restore with `./scripts/test-update.sh restore` (rebuilds + notarizes real v3.2). The `--fast` flag on `build.sh` skips DMG/notarization for local-only builds.
 
 ## Rebuilding ADMProgress
 
