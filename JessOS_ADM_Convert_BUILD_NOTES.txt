@@ -62,6 +62,35 @@ BUILD LOG (newest first)
 ================================================================================
 
 --------------------------------------------------------------------------------
+VERSION 3.3 - 2026-07-13
+--------------------------------------------------------------------------------
+
+Finder Right-Click Menu
+
+New Features:
+  [+] Finder Sync extension (ADMConvertFinder.appex) — "Convert to M4A - JessOS"
+      and "Convert to M4A (Folder) - JessOS" appear at the top level of Finder's
+      right-click menu for WAV/AIFF files and folders, with the app icon
+  [+] Extension is enabled automatically on first launch (pluginkit election);
+      one-time fallback prompt if that fails, plus a "Finder Extension
+      Settings..." item in the app menu
+  [+] admconvert:// URL scheme — the extension hands files to the main app,
+      which converts headless with a per-invocation output-folder override
+      (URL handled via kAEGetURL in willFinishLaunching so the main window
+      never flashes open)
+
+Removed:
+  [-] Services menu entry ("Convert to M4A using JessOS") — replaced by the
+      right-click menu items
+  [-] Dead legacy shell-script pipeline (convert.sh, run_with_progress.sh,
+      ADMProgress helper app) — all conversion has been native Swift since v3.0
+
+Fixes:
+  [+] .wave extension now accepted in headless mode (document types already
+      claimed it)
+
+
+--------------------------------------------------------------------------------
 VERSION 3.1 - 2026-02-12
 --------------------------------------------------------------------------------
 

@@ -24,8 +24,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
         set { UserDefaults.standard.set(newValue, forKey: "useOutputFolder") }
     }
 
-    let parallelJobs = "12"
-
     // Keka-style quit behavior
     private var quitAfterNextConversion = true
     private var activeConversions = 0
@@ -34,15 +32,24 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
     func applicationWillFinishLaunching(_ notification: Notification) {
         // Set up the main menu bar
         setupMainMenu()
+
+        // Register for admconvert:// URLs here, NOT via application(_:open:).
+        // AppKit delivers that delegate call after didFinishLaunching, which
+        // races the 0.15s show-window timer — losing the race flashes the main
+        // window open for Finder-extension conversions. A kAEGetURL handler
+        // registered in willFinishLaunching is guaranteed to see a launch URL
+        // before the timer starts (same ordering dock drops rely on).
+        NSAppleEventManager.shared().setEventHandler(
+            self,
+            andSelector: #selector(handleGetURLEvent(_:withReplyEvent:)),
+            forEventClass: AEEventClass(kInternetEventClass),
+            andEventID: AEEventID(kAEGetURL)
+        )
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Register default preferences
         UserDefaults.standard.register(defaults: ["includeSoundCheck": true, "useOutputFolder": false])
-
-        // Register for services
-        NSApp.servicesProvider = self
-        NSUpdateDynamicServices()
 
         // Create window controller (but don't show window yet)
         mainWindowController = MainWindowController(appDelegate: self)
@@ -68,6 +75,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
         DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
             self.updater.updater.checkForUpdatesInBackground()
         }
+
+        // Silently enable the Finder extension on first run (same pluginkit
+        // mechanism Dropbox uses); falls back to a one-time prompt if that
+        // fails. Skipped for headless launches.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            if !self.launchedWithFiles {
+                self.setupFinderExtensionIfNeeded()
+            }
+        }
     }
 
     // MARK: - Main Menu Setup
@@ -87,6 +103,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
         let updatesItem = NSMenuItem(title: "Check for Updates...", action: #selector(SPUStandardUpdaterController.checkForUpdates(_:)), keyEquivalent: "")
         updatesItem.target = updater
         appMenu.addItem(updatesItem)
+
+        appMenu.addItem(NSMenuItem(title: "Finder Extension Settings...", action: #selector(openFinderExtensionSettings(_:)), keyEquivalent: ""))
         appMenu.addItem(NSMenuItem.separator())
 
         let servicesItem = NSMenuItem(title: "Services", action: nil, keyEquivalent: "")
@@ -149,7 +167,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        // Don't quit if we're in headless mode (processing files via ADMProgress)
+        // Don't quit if we're in headless mode (conversion still running)
         if launchedWithFiles || activeConversions > 0 {
             return false
         }
@@ -262,6 +280,33 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
         NSApp.reply(toOpenOrPrint: .success)
     }
 
+    // MARK: - URL Scheme (Finder extension)
+
+    // admconvert://convert?mode=samefolder|usefolder&file=/path&file=/path...
+    // Sent by the Finder Sync extension. Always converts headless, with the
+    // output-folder choice from the menu item overriding the saved preference.
+    @objc private func handleGetURLEvent(_ event: NSAppleEventDescriptor, withReplyEvent replyEvent: NSAppleEventDescriptor) {
+        guard let urlString = event.paramDescriptor(forKeyword: keyDirectObject)?.stringValue,
+              let url = URL(string: urlString),
+              url.scheme == "admconvert",
+              let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let queryItems = components.queryItems else { return }
+
+        let files = queryItems
+            .filter { $0.name == "file" }
+            .compactMap { $0.value }
+            .map { URL(fileURLWithPath: $0) }
+        guard !files.isEmpty else { return }
+
+        let mode = queryItems.first(where: { $0.name == "mode" })?.value
+        let outputFolderOverride: Bool? = (mode == "usefolder") ? true : (mode == "samefolder" ? false : nil)
+
+        launchedWithFiles = true
+        let shouldQuit = quitAfterNextConversion
+        quitAfterNextConversion = false
+        processFilesHeadless(files, quitWhenDone: shouldQuit, outputFolderOverride: outputFolderOverride)
+    }
+
     private func handleIncomingFiles(_ urls: [URL]) {
         // If window is already visible, add files to the list (window mode)
         if isWindowVisible {
@@ -275,37 +320,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
         let shouldQuit = quitAfterNextConversion
         quitAfterNextConversion = false
         queueFilesForHeadless(urls, quitWhenDone: shouldQuit)
-    }
-
-    // MARK: - Services Handler
-
-    @objc func convertToM4A(_ pboard: NSPasteboard, userData: String?, error: AutoreleasingUnsafeMutablePointer<NSString?>) {
-        guard let items = pboard.pasteboardItems else {
-            error.pointee = "No items on pasteboard" as NSString
-            return
-        }
-
-        var urls: [URL] = []
-
-        for item in items {
-            if let urlString = item.string(forType: .fileURL),
-               let url = URL(string: urlString) {
-                urls.append(url)
-            }
-        }
-
-        if urls.isEmpty, let filenames = pboard.propertyList(forType: NSPasteboard.PasteboardType("NSFilenamesPboardType")) as? [String] {
-            urls = filenames.map { URL(fileURLWithPath: $0) }
-        }
-
-        if urls.isEmpty {
-            error.pointee = "No files found" as NSString
-            return
-        }
-
-        // Treat Services the same as dock drop: headless mode, quit when done
-        launchedWithFiles = true
-        queueFilesForHeadless(urls, quitWhenDone: true)
     }
 
     // MARK: - Processing (Headless Mode with native progress popup)
@@ -340,7 +354,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1, execute: workItem)
     }
 
-    func processFilesHeadless(_ urls: [URL], quitWhenDone: Bool = false) {
+    func processFilesHeadless(_ urls: [URL], quitWhenDone: Bool = false, outputFolderOverride: Bool? = nil) {
         guard !urls.isEmpty else { return }
 
         activeConversions += 1
@@ -348,7 +362,92 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
         // Create and start the headless progress controller
         let controller = HeadlessProgressController()
         headlessController = controller
-        controller.start(urls: urls, quitWhenDone: quitWhenDone)
+        controller.start(urls: urls, quitWhenDone: quitWhenDone, outputFolderOverride: outputFolderOverride)
+    }
+
+    // MARK: - Finder Extension Enablement
+
+    @objc func openFinderExtensionSettings(_ sender: Any?) {
+        let url = URL(string: "x-apple.systempreferences:com.apple.ExtensionsPreferences?extensionPointIdentifier=com.apple.FinderSync")!
+        NSWorkspace.shared.open(url)
+    }
+
+    private let finderExtensionID = "com.jessos.adm-convert.finder"
+
+    @discardableResult
+    private func runPluginkit(_ arguments: [String]) -> String? {
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/usr/bin/pluginkit")
+        task.arguments = arguments
+
+        let pipe = Pipe()
+        task.standardOutput = pipe
+        task.standardError = FileHandle.nullDevice
+
+        do {
+            try task.run()
+        } catch {
+            return nil
+        }
+        task.waitUntilExit()
+        return String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)
+    }
+
+    // Returns true/false for enabled/disabled, nil if pluginkit gave no answer
+    // (e.g. the extension isn't registered yet on a fresh install).
+    private func finderExtensionEnabled() -> Bool? {
+        guard let output = runPluginkit(["-m", "-i", finderExtensionID]),
+              let flag = output.trimmingCharacters(in: .whitespacesAndNewlines).first else { return nil }
+        return flag == "+"
+    }
+
+    // One-shot: silently self-enable the extension (the pluginkit election is
+    // user-level, no admin rights involved). If the user later disables it in
+    // System Settings, we never re-enable — their choice stands.
+    private func setupFinderExtensionIfNeeded() {
+        let doneKey = "finderExtensionSetupDone"
+        guard !UserDefaults.standard.bool(forKey: doneKey) else { return }
+
+        DispatchQueue.global(qos: .utility).async {
+            // nil = not registered with pluginkit yet; try again next launch.
+            guard let enabled = self.finderExtensionEnabled() else { return }
+
+            if enabled {
+                UserDefaults.standard.set(true, forKey: doneKey)
+                return
+            }
+
+            self.runPluginkit(["-e", "use", "-i", self.finderExtensionID])
+            Thread.sleep(forTimeInterval: 1.0)
+            let nowEnabled = self.finderExtensionEnabled() == true
+            UserDefaults.standard.set(true, forKey: doneKey)
+
+            if !nowEnabled {
+                DispatchQueue.main.async {
+                    self.showFinderExtensionPrompt()
+                }
+            }
+        }
+    }
+
+    // Fallback, only shown if the silent enable didn't take.
+    private func showFinderExtensionPrompt() {
+        let alert = NSAlert()
+        alert.messageText = "Convert right from Finder"
+        alert.informativeText = """
+            JessOS ADM Convert can now add "Convert to M4A" to Finder's right-click menu.
+
+            To turn it on: System Settings → General → Login Items & Extensions, then under Extensions click the ⓘ next to "File Providers" and enable JessOS ADM Convert.
+
+            You can open these settings anytime from the app menu.
+            """
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "Open System Settings")
+        alert.addButton(withTitle: "Not Now")
+
+        if alert.runModal() == .alertFirstButtonReturn {
+            openFinderExtensionSettings(nil)
+        }
     }
 
     func showError(_ message: String) {
@@ -359,13 +458,5 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
             alert.alertStyle = .critical
             alert.runModal()
         }
-    }
-}
-
-// MARK: - String Extension for Shell Quoting
-
-extension String {
-    func shellQuoted() -> String {
-        return "'\(self.replacingOccurrences(of: "'", with: "'\\''"))'"
     }
 }

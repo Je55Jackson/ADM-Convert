@@ -14,16 +14,20 @@ class HeadlessProgressController: NSObject {
     private var quitWhenDone = false
     private let counterLock = NSLock()
 
+    // Per-invocation override from the Finder extension; nil = saved preference
+    private var outputFolderOverride: Bool?
+
     // User preferences
     private var includeSoundCheck: Bool {
         UserDefaults.standard.bool(forKey: "includeSoundCheck")
     }
     private var useOutputFolder: Bool {
-        UserDefaults.standard.bool(forKey: "useOutputFolder")
+        outputFolderOverride ?? UserDefaults.standard.bool(forKey: "useOutputFolder")
     }
 
-    func start(urls: [URL], quitWhenDone: Bool) {
+    func start(urls: [URL], quitWhenDone: Bool, outputFolderOverride: Bool? = nil) {
         self.quitWhenDone = quitWhenDone
+        self.outputFolderOverride = outputFolderOverride
 
         // Collect audio files
         let audioFiles = collectAudioFiles(from: urls)
@@ -174,7 +178,7 @@ class HeadlessProgressController: NSObject {
 
         // Convert WAV/AIFF to M4A
         let ext = file.pathExtension.lowercased()
-        if ext == "wav" || ext == "aif" || ext == "aiff" {
+        if ext == "wav" || ext == "wave" || ext == "aif" || ext == "aiff" {
             do {
                 _ = try convertFile(file)
             } catch {
@@ -325,7 +329,7 @@ class HeadlessProgressController: NSObject {
     private func collectAudioFiles(from urls: [URL]) -> [URL] {
         var audioFiles: [URL] = []
         let fm = FileManager.default
-        let validExtensions = ["wav", "aif", "aiff"]
+        let validExtensions = ["wav", "wave", "aif", "aiff"]
 
         for url in urls {
             var isDir: ObjCBool = false

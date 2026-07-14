@@ -40,18 +40,8 @@ mkdir -p "$BUILD_DIR"
 
 # Create app bundle structure
 mkdir -p "$APP_BUNDLE/Contents/MacOS"
-mkdir -p "$APP_BUNDLE/Contents/Resources/Scripts"
+mkdir -p "$APP_BUNDLE/Contents/Resources"
 mkdir -p "$APP_BUNDLE/Contents/Frameworks"
-
-# Rebuild ADMProgress with new styling
-echo "Compiling ADMProgress..."
-swiftc \
-    -o "$SCRIPT_DIR/Resources/ADMProgress" \
-    -target arm64-apple-macosx14.0 \
-    -sdk $(xcrun --show-sdk-path) \
-    -framework Cocoa \
-    -framework QuartzCore \
-    "$SCRIPT_DIR/ADMProgressSource/main.swift"
 
 # Compile Swift code (manual entry point with all sources)
 echo "Compiling Swift code..."
@@ -76,19 +66,33 @@ swiftc \
     "$SCRIPT_DIR/Sources/Views/FileRowView.swift" \
     "$SCRIPT_DIR/Sources/Views/HeadlessProgressView.swift"
 
+# Build Finder Sync extension (.appex) — hand-rolled bundle, no Xcode.
+# Appex binaries have no main of their own; Foundation's _NSExtensionMain is
+# the entry point, set via the linker.
+echo "Compiling Finder extension..."
+APPEX="$APP_BUNDLE/Contents/PlugIns/ADMConvertFinder.appex"
+mkdir -p "$APPEX/Contents/MacOS"
+swiftc \
+    -o "$APPEX/Contents/MacOS/ADMConvertFinder" \
+    -target arm64-apple-macosx14.0 \
+    -sdk $(xcrun --show-sdk-path) \
+    -application-extension \
+    -framework Cocoa \
+    -framework Foundation \
+    -framework FinderSync \
+    -Xlinker -e -Xlinker _NSExtensionMain \
+    "$SCRIPT_DIR/FinderExtSource/main.swift"
+
+cp "$SCRIPT_DIR/FinderExtSource/Info.plist" "$APPEX/Contents/"
+# Keep the extension's version in lockstep with the app's
+for key in CFBundleShortVersionString CFBundleVersion; do
+    VAL=$(/usr/libexec/PlistBuddy -c "Print :$key" "$SCRIPT_DIR/Info.plist")
+    /usr/libexec/PlistBuddy -c "Set :$key $VAL" "$APPEX/Contents/Info.plist"
+done
+
 # Copy Info.plist
 echo "Copying Info.plist..."
 cp "$SCRIPT_DIR/Info.plist" "$APP_BUNDLE/Contents/"
-
-# Copy scripts
-echo "Copying scripts..."
-cp "$SCRIPT_DIR/Resources/Scripts/convert.sh" "$APP_BUNDLE/Contents/Resources/Scripts/"
-cp "$SCRIPT_DIR/Resources/Scripts/run_with_progress.sh" "$APP_BUNDLE/Contents/Resources/Scripts/"
-chmod +x "$APP_BUNDLE/Contents/Resources/Scripts/"*.sh
-
-# Copy ADMProgress
-echo "Copying ADMProgress..."
-cp "$SCRIPT_DIR/Resources/ADMProgress" "$APP_BUNDLE/Contents/Resources/"
 
 # Copy icon
 echo "Copying icon..."
@@ -125,8 +129,11 @@ done
 echo "Code signing Sparkle.framework..."
 codesign --force --options runtime --timestamp --sign "$SIGN_ID" "$EMBEDDED_SPARKLE"
 
-echo "Code signing ADMProgress..."
-codesign --force --options runtime --timestamp --sign "$SIGN_ID" "$APP_BUNDLE/Contents/Resources/ADMProgress"
+# App extensions must be sandboxed — sign with entitlements, before the app.
+echo "Code signing Finder extension..."
+codesign --force --options runtime --timestamp \
+    --entitlements "$SCRIPT_DIR/FinderExtSource/ADMConvertFinder.entitlements" \
+    --sign "$SIGN_ID" "$APPEX"
 
 echo "Code signing app bundle..."
 codesign --force --options runtime --timestamp --sign "$SIGN_ID" "$APP_BUNDLE"

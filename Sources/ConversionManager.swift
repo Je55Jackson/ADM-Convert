@@ -31,10 +31,8 @@ class ConversionManager: ObservableObject {
     @AppStorage("useOutputFolder") var useOutputFolder: Bool = false
 
     @Published var isConverting = false
-    @Published var activeConversions = 0
     @Published var fileItems: [FileConversionItem] = []
 
-    let parallelJobs = "12"
     private let maxConcurrentConversions = 4
     private let tempDir = "/tmp/JessOS_ADM_Convert"
 
@@ -323,72 +321,4 @@ class ConversionManager: ObservableObject {
         return audioFiles
     }
 
-    // MARK: - Headless Mode (External Progress Popup)
-
-    func processFiles(_ urls: [URL], quitWhenDone: Bool = false) {
-        guard !urls.isEmpty else { return }
-
-        let bundle = Bundle.main
-        guard let scriptPath = bundle.path(forResource: "convert", ofType: "sh", inDirectory: "Scripts"),
-              let wrapperPath = bundle.path(forResource: "run_with_progress", ofType: "sh", inDirectory: "Scripts"),
-              let progressAppPath = bundle.path(forResource: "ADMProgress", ofType: nil) else {
-            showError("Required scripts not found in app bundle")
-            return
-        }
-
-        let quotedPaths = urls.map { "'\($0.path.replacingOccurrences(of: "'", with: "'\\''"))'" }
-        let pathString = quotedPaths.joined(separator: " ")
-
-        let soundCheckFlag = includeSoundCheck ? "soundcheck" : "nosoundcheck"
-        let outputFolderFlag = useOutputFolder ? "usefolder" : "samefolder"
-
-        let command = "\(wrapperPath.shellQuoted()) \(scriptPath.shellQuoted()) \(progressAppPath.shellQuoted()) \(parallelJobs) \(soundCheckFlag) \(outputFolderFlag) \(pathString)"
-
-        DispatchQueue.main.async {
-            self.activeConversions += 1
-            self.isConverting = true
-        }
-
-        DispatchQueue.global(qos: .userInitiated).async {
-            let task = Process()
-            task.executableURL = URL(fileURLWithPath: "/bin/zsh")
-            task.arguments = ["-c", command]
-
-            do {
-                try task.run()
-                task.waitUntilExit()
-
-                DispatchQueue.main.async {
-                    self.activeConversions -= 1
-                    self.isConverting = self.activeConversions > 0
-
-                    if quitWhenDone && self.activeConversions == 0 {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                            NSApp.terminate(nil)
-                        }
-                    }
-                }
-            } catch {
-                DispatchQueue.main.async {
-                    self.activeConversions -= 1
-                    self.isConverting = self.activeConversions > 0
-                    self.showError("Failed to start conversion: \(error.localizedDescription)")
-                }
-            }
-        }
-    }
-
-    // MARK: - Error Handling
-
-    private func showError(_ message: String) {
-        DispatchQueue.main.async {
-            let alert = NSAlert()
-            alert.messageText = "Error"
-            alert.informativeText = message
-            alert.alertStyle = .critical
-            alert.runModal()
-        }
-    }
 }
-
-// shellQuoted() extension is in AppDelegate.swift
