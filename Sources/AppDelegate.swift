@@ -400,6 +400,26 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1, execute: workItem)
     }
 
+    // Keka-style quit after a headless conversion — but never out from under a
+    // Sparkle update dialog: the launch-time background check can surface an
+    // update offer mid-conversion, and terminating would kill it before the
+    // user can respond (headless-only users would miss every offer). Polls
+    // until the update session ends, then quits.
+    func quitAfterConversion() {
+        // User pulled up the main window in the meantime — they're engaged,
+        // stop auto-quitting entirely.
+        if isWindowVisible { return }
+
+        guard updater.updater.sessionInProgress else {
+            NSApp.terminate(nil)
+            return
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) { [weak self] in
+            self?.quitAfterConversion()
+        }
+    }
+
     func processFilesHeadless(_ urls: [URL], quitWhenDone: Bool = false, outputFolderOverride: Bool? = nil) {
         guard !urls.isEmpty else { return }
 

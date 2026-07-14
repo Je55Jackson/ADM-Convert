@@ -34,7 +34,7 @@ class HeadlessProgressController: NSObject {
 
         guard !audioFiles.isEmpty else {
             if quitWhenDone {
-                NSApp.terminate(nil)
+                quitViaAppDelegate()
             }
             return
         }
@@ -170,7 +170,7 @@ class HeadlessProgressController: NSObject {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 self.close()
                 if self.quitWhenDone {
-                    NSApp.terminate(nil)
+                    self.quitViaAppDelegate()
                 }
             }
         }
@@ -358,6 +358,16 @@ class HeadlessProgressController: NSObject {
     func close() {
         window?.close()
         window = nil
+    }
+
+    // Route quits through AppDelegate so an in-progress Sparkle update
+    // session defers the Keka-style auto-quit instead of being killed by it.
+    private func quitViaAppDelegate() {
+        if let appDelegate = NSApp.delegate as? AppDelegate {
+            appDelegate.quitAfterConversion()
+        } else {
+            NSApp.terminate(nil)
+        }
     }
 }
 
