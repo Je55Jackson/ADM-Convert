@@ -51,6 +51,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
         // Register default preferences
         UserDefaults.standard.register(defaults: ["includeSoundCheck": true, "useOutputFolder": false])
 
+        // Register the Services-menu handlers (cloud-storage fallback)
+        NSApp.servicesProvider = self
+        NSUpdateDynamicServices()
+
         // Create window controller (but don't show window yet)
         mainWindowController = MainWindowController(appDelegate: self)
 
@@ -320,6 +324,48 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
         let shouldQuit = quitAfterNextConversion
         quitAfterNextConversion = false
         queueFilesForHeadless(urls, quitWhenDone: shouldQuit)
+    }
+
+    // MARK: - Services Handlers (Finder right-click → Services submenu)
+
+    // Finder never routes Finder Sync menus inside File Provider domains
+    // (Dropbox, Google Drive, Synology Drive under ~/Library/CloudStorage) —
+    // verified empirically. These Services entries DO appear there, so
+    // cloud-storage users get right-click coverage via the Services submenu.
+
+    @objc func convertToM4A(_ pboard: NSPasteboard, userData: String?, error: AutoreleasingUnsafeMutablePointer<NSString?>) {
+        handleServiceRequest(pboard, error: error, outputFolderOverride: false)
+    }
+
+    @objc func convertToM4AToFolder(_ pboard: NSPasteboard, userData: String?, error: AutoreleasingUnsafeMutablePointer<NSString?>) {
+        handleServiceRequest(pboard, error: error, outputFolderOverride: true)
+    }
+
+    private func handleServiceRequest(_ pboard: NSPasteboard, error: AutoreleasingUnsafeMutablePointer<NSString?>, outputFolderOverride: Bool) {
+        var urls: [URL] = []
+
+        if let items = pboard.pasteboardItems {
+            for item in items {
+                if let urlString = item.string(forType: .fileURL),
+                   let url = URL(string: urlString) {
+                    urls.append(url)
+                }
+            }
+        }
+
+        if urls.isEmpty, let filenames = pboard.propertyList(forType: NSPasteboard.PasteboardType("NSFilenamesPboardType")) as? [String] {
+            urls = filenames.map { URL(fileURLWithPath: $0) }
+        }
+
+        guard !urls.isEmpty else {
+            error.pointee = "No files found" as NSString
+            return
+        }
+
+        launchedWithFiles = true
+        let shouldQuit = quitAfterNextConversion
+        quitAfterNextConversion = false
+        processFilesHeadless(urls, quitWhenDone: shouldQuit, outputFolderOverride: outputFolderOverride)
     }
 
     // MARK: - Processing (Headless Mode with native progress popup)

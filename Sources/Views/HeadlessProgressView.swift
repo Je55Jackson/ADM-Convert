@@ -106,6 +106,10 @@ class HeadlessProgressController: NSObject {
         window.isOpaque = false
         window.hasShadow = true
         window.level = .floating
+        // NSWindow defaults to isReleasedWhenClosed = true: AppKit would
+        // release the window on close() on top of our ARC strong reference —
+        // an over-release that segfaults at autorelease-pool pop.
+        window.isReleasedWhenClosed = false
 
         // Position above dock
         if let screen = NSScreen.main {

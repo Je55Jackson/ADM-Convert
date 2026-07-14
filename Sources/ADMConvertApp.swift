@@ -34,6 +34,9 @@ class MainWindowController {
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
         window.isMovableByWindowBackground = true
+        // Guard against AppKit's release-on-close double-releasing our ARC
+        // reference (see HeadlessProgressController.showWindow).
+        window.isReleasedWhenClosed = false
         window.center()
         window.setFrameAutosaveName("MainWindow")
         window.contentView = NSHostingView(rootView: contentView)

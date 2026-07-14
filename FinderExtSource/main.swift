@@ -1,9 +1,15 @@
 import Cocoa
 import FinderSync
 
-// Finder Sync extension: adds "Create ADM" items to Finder's right-click menu.
+// Finder Sync extension: adds "Convert to M4A" items to Finder's right-click menu.
 // Does no conversion itself — hands the selected files to the main app via the
 // admconvert:// URL scheme and the app's headless conversion path.
+//
+// Known platform limit: Finder does NOT route Finder Sync menus inside File
+// Provider domains (Dropbox, Google Drive, Synology Drive under
+// ~/Library/CloudStorage) — verified empirically; menu(for:) is never called
+// there even when the domain root is in directoryURLs. The Quick Actions the
+// main app installs into ~/Library/Services cover those locations instead.
 
 @objc(FinderSync)
 class FinderSync: FIFinderSync {
@@ -22,11 +28,42 @@ class FinderSync: FIFinderSync {
         return image
     }()
 
+    private var rescanTimer: DispatchSourceTimer?
+
     override init() {
         super.init()
-        // Monitor everything so the menu is available anywhere in Finder.
-        // We draw no badges, so this costs nothing beyond menu callbacks.
-        FIFinderSyncController.default().directoryURLs = [URL(fileURLWithPath: "/")]
+        updateMonitoredDirectories()
+
+        // Volumes mount and unmount while we're running — rescan periodically.
+        let timer = DispatchSource.makeTimerSource(queue: .main)
+        timer.schedule(deadline: .now() + 30, repeating: 30)
+        timer.setEventHandler { [weak self] in self?.updateMonitoredDirectories() }
+        timer.resume()
+        rescanTimer = timer
+    }
+
+    // Monitor everything so the menu is available anywhere in Finder — we draw
+    // no badges, so this costs nothing beyond menu callbacks. Monitoring "/"
+    // only covers the boot volume: external drives and network shares under
+    // /Volumes must each be monitored explicitly or the menu won't appear
+    // there. mountedVolumeURLs uses the mount table, so no sandbox exception
+    // is needed to enumerate them.
+    private func updateMonitoredDirectories() {
+        var dirs: Set<URL> = [URL(fileURLWithPath: "/")]
+
+        if let volumes = FileManager.default.mountedVolumeURLs(
+            includingResourceValuesForKeys: nil,
+            options: [.skipHiddenVolumes]
+        ) {
+            for volume in volumes where volume.path.hasPrefix("/Volumes/") {
+                dirs.insert(volume)
+            }
+        }
+
+        let controller = FIFinderSyncController.default()
+        if controller.directoryURLs != dirs {
+            controller.directoryURLs = dirs
+        }
     }
 
     // MARK: - Menu

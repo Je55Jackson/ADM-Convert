@@ -62,6 +62,29 @@ BUILD LOG (newest first)
 ================================================================================
 
 --------------------------------------------------------------------------------
+VERSION 3.3.1 - 2026-07-13
+--------------------------------------------------------------------------------
+
+Cloud Storage + Network Volume Coverage, Crash Fix
+
+Fixes:
+  [+] Right-click conversion inside File Provider domains (Dropbox, Google
+      Drive, Synology Drive under ~/Library/CloudStorage): macOS never routes
+      Finder Sync menus there (verified empirically — menu(for:) is not
+      called even with the domain root monitored), so the app now also
+      declares both actions as NSServices. They appear under the right-click
+      Services submenu in cloud folders when audio files are selected.
+  [+] Finder extension menu items now appear on external drives and network
+      shares: monitoring "/" only covers the boot volume, so the extension
+      now monitors every mounted volume (via mountedVolumeURLs, rescanned
+      every 30s).
+  [+] Fixed post-conversion crash: NSWindow defaults to
+      isReleasedWhenClosed=true, double-releasing the headless progress
+      window under ARC (segfault at autorelease-pool pop, timing-dependent).
+      Both programmatic windows now set isReleasedWhenClosed=false.
+
+
+--------------------------------------------------------------------------------
 VERSION 3.3 - 2026-07-13
 --------------------------------------------------------------------------------
 

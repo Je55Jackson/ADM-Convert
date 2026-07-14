@@ -54,7 +54,9 @@ A Finder Sync extension (`ADMConvertFinder.appex`, embedded in `Contents/PlugIns
 - The appex is hand-rolled (no Xcode): `build.sh` compiles it with `swiftc -application-extension` and links the entry point via `-Xlinker -e -Xlinker _NSExtensionMain`; the principal class is exposed as plain `FinderSync` via `@objc(FinderSync)`.
 - App extensions must be sandboxed: signed with `FinderExtSource/ADMConvertFinder.entitlements`, before the outer app signature.
 - macOS won't let apps enable Finder extensions programmatically. The user flips the toggle in System Settings → General → Login Items & Extensions → Finder. The app shows a one-time prompt (`maybePromptForFinderExtension`, checks state via `pluginkit -m -i com.jessos.adm-convert.finder`) and has an app-menu item "Finder Extension Settings…".
-- The extension only registers with macOS once the app is in `/Applications` — `pluginkit -a` on a build-dir copy does not work. Use `./build.sh --deploy --fast` to test locally.
+- The extension only registers with macOS once the app is in `/Applications` — `pluginkit -a` on a build-dir copy does not work. Use `./build.sh --deploy --fast` to test locally, and **restart Finder (`killall Finder`) after every redeploy** or Finder loses the extension connection.
+- The extension monitors `/` plus every mounted volume (rescanned every 30s) — monitoring `/` alone does not cover external drives or network shares.
+- **File Provider domains (Dropbox, Google Drive, Synology Drive under `~/Library/CloudStorage`) never get Finder Sync menus** — Finder doesn't call `menu(for:)` there even with the domain root monitored (verified empirically; monitoring them does nothing). Coverage there comes from the `NSServices` entries in `Info.plist` (v3.3.1+): the same two actions appear under the right-click **Services** submenu, handled by `convertToM4A`/`convertToM4AToFolder` in `AppDelegate`. The declaration needs both `NSSendFileTypes` and `NSSendTypes` to match in provider domains, and matches audio-file selections (not folders) there.
 
 ## Key Technical Details
 
