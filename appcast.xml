@@ -3,6 +3,22 @@
     <channel>
         <title>JessOS ADM Convert</title>
         <item>
+            <title>3.3.1</title>
+            <pubDate>Mon, 13 Jul 2026 18:59:00 -0700</pubDate>
+            <sparkle:version>4</sparkle:version>
+            <sparkle:shortVersionString>3.3.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description><![CDATA[<h2>Version 3.3.1</h2>
+<ul>
+    <li><strong>Right-click conversion now works inside Dropbox, Google Drive, and Synology Drive folders</strong> — macOS doesn't allow top-level menu items in cloud-storage folders, so there you'll find "Convert to M4A - JessOS" under the right-click <em>Services</em> submenu (select the audio files, not a folder)</li>
+    <li>Right-click menu items now appear on external drives and network shares (NAS volumes)</li>
+    <li>Fixed a crash that could occur just after a conversion finished</li>
+</ul>
+]]></description>
+            <enclosure url="https://github.com/Je55Jackson/ADM-Convert/releases/download/v3.3.1/JessOS.ADM.Convert.dmg" length="6058898" type="application/octet-stream" sparkle:edSignature="x6/Wta6jtUuJzuS3B/F3ZEGvmeywEDvyr+qpPM+VPAP82zuVUFGE2IZGS7zxhGmq2rInj0iJCdx/wRTQiEPQCw=="/>
+        </item>
+        <item>
             <title>3.3</title>
             <pubDate>Mon, 13 Jul 2026 17:59:44 -0700</pubDate>
             <sparkle:version>3</sparkle:version>
@@ -32,23 +48,6 @@
                 </ul>
             ]]></description>
             <enclosure url="https://github.com/Je55Jackson/ADM-Convert/releases/download/v3.2.1/JessOS.ADM.Convert.dmg" length="6060884" type="application/octet-stream" sparkle:edSignature="59/8CDMFdcqHxb4hgeIADIIqrATxd0vTJ5H0kiTfbrTaZtk2NXhM0Ac7DEYNlQfclSI/2JVRh7E7m4y0I++HCw=="/>
-        </item>
-        <item>
-            <title>3.2</title>
-            <pubDate>Fri, 15 May 2026 16:40:04 -0700</pubDate>
-            <sparkle:version>1</sparkle:version>
-            <sparkle:shortVersionString>3.2</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description><![CDATA[
-                <h2>Version 3.2</h2>
-                <ul>
-                    <li>Updated auto-updater</li>
-                    <li>More secure updates</li>
-                    <li>Refined app size (Less Code)</li>
-                </ul>
-            ]]></description>
-            <enclosure url="https://github.com/Je55Jackson/ADM-Convert/releases/download/v3.2/JessOS.ADM.Convert.dmg" length="6060655" type="application/octet-stream" sparkle:edSignature="PNH2vx1TyHJDE80Gowf/v5rbqwPsaIbCvquaSnMagPuldOowWtk4Pp8btRdU2f2H1IOfgZFQFIkVYKnLenFBBA=="/>
         </item>
     </channel>
 </rss>
