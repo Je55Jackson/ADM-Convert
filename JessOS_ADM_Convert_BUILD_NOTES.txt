@@ -62,6 +62,22 @@ BUILD LOG (newest first)
 ================================================================================
 
 --------------------------------------------------------------------------------
+VERSION 3.3.2 - 2026-07-13
+--------------------------------------------------------------------------------
+
+Update-Dialog Quit Guard
+
+Fixes:
+  [+] Headless (right-click / dock-drop) conversions no longer auto-quit
+      over an active Sparkle update session. The launch-time update check
+      could surface an offer mid-conversion and the Keka-style quit killed
+      the dialog seconds later — headless-only users could miss every
+      update offer. Quits now route through AppDelegate.quitAfterConversion,
+      which polls updater.sessionInProgress and terminates only after the
+      update session ends (or never, if the user opened the main window).
+
+
+--------------------------------------------------------------------------------
 VERSION 3.3.1 - 2026-07-13
 --------------------------------------------------------------------------------
 
