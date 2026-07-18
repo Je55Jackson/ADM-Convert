@@ -3,6 +3,21 @@
     <channel>
         <title>JessOS ADM Convert</title>
         <item>
+            <title>3.3.3</title>
+            <pubDate>Sat, 18 Jul 2026 13:26:58 -0700</pubDate>
+            <sparkle:version>6</sparkle:version>
+            <sparkle:shortVersionString>3.3.3</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description><![CDATA[<h2>Version 3.3.3</h2>
+<ul>
+    <li><strong>Fixed: right-click menu items disappearing after automatic updates.</strong> When an update installed silently in the background, macOS could lose track of the Finder extension until the app was next opened. The app now re-registers the extension automatically after every update.</li>
+    <li>If your "Convert to M4A" right-click items are currently missing, just open JessOS ADM Convert once — they'll come right back.</li>
+</ul>
+]]></description>
+            <enclosure url="https://github.com/Je55Jackson/ADM-Convert/releases/download/v3.3.3/JessOS.ADM.Convert.dmg" length="6064634" type="application/octet-stream" sparkle:edSignature="rE5Jtm8capIy3B/hzkZhFnAkJYU7suN7ZwTapkrKUI8jYmXj9OfTjQoRnxhVqr+1xVj3e6GXH0CUYB3sU/4yDw=="/>
+        </item>
+        <item>
             <title>3.3.2</title>
             <pubDate>Thu, 16 Jul 2026 15:09:06 -0700</pubDate>
             <sparkle:version>5</sparkle:version>
@@ -31,22 +46,6 @@
 </ul>
 ]]></description>
             <enclosure url="https://github.com/Je55Jackson/ADM-Convert/releases/download/v3.3.1/JessOS.ADM.Convert.dmg" length="6058898" type="application/octet-stream" sparkle:edSignature="x6/Wta6jtUuJzuS3B/F3ZEGvmeywEDvyr+qpPM+VPAP82zuVUFGE2IZGS7zxhGmq2rInj0iJCdx/wRTQiEPQCw=="/>
-        </item>
-        <item>
-            <title>3.3</title>
-            <pubDate>Mon, 13 Jul 2026 17:59:44 -0700</pubDate>
-            <sparkle:version>3</sparkle:version>
-            <sparkle:shortVersionString>3.3</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description><![CDATA[<h2>Version 3.3</h2>
-<ul>
-    <li><strong>New: Convert right from Finder</strong> — right-click any WAV or AIFF file (or folder) and choose "Convert to M4A - JessOS" or "Convert to M4A (Folder) - JessOS". Enabled automatically the first time you launch the app.</li>
-    <li>The old entry in Finder's Services submenu has been replaced by the new right-click menu items</li>
-    <li>Smaller app with simplified internals</li>
-</ul>
-]]></description>
-            <enclosure url="https://github.com/Je55Jackson/ADM-Convert/releases/download/v3.3/JessOS.ADM.Convert.dmg" length="6046425" type="application/octet-stream" sparkle:edSignature="mfRRiCZ6i/j56e7bc0fvGA5fn3im8v3qwgTnQo/qhLjIn2QyJwjRHhWs1YKjUR29OqZajSbRB1vCeEEHmbhJDQ=="/>
         </item>
     </channel>
 </rss>
