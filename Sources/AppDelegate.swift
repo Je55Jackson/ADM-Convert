@@ -2,10 +2,18 @@ import Cocoa
 import Sparkle
 import SwiftUI
 
-class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, ObservableObject {
+class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, ObservableObject, SPUUpdaterDelegate {
 
     let conversionManager = ConversionManager()
-    private let updater = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
+    private lazy var updater = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: self, userDriverDelegate: nil)
+
+    // Set when Sparkle stages a silent update to install on quit — see
+    // applicationWillTerminate.
+    private var updateWillInstallOnQuit = false
+
+    // Set from main.swift when launched with --register-extension: exist just
+    // long enough for pkd to discover the Finder extension, then quit.
+    var registerExtensionOnly = false
 
     // Window visibility tracking
     @Published var isWindowVisible = false
@@ -48,6 +56,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        if registerExtensionOnly {
+            // Invisible post-update cameo: launching is what makes pkd
+            // re-register the appex. Give it a few seconds, then leave.
+            launchedWithFiles = true
+            quitAfterNextConversion = false
+            DispatchQueue.main.asyncAfter(deadline: .now() + 8.0) {
+                NSApp.terminate(nil)
+            }
+            return
+        }
+
         // Register default preferences
         UserDefaults.standard.register(defaults: ["includeSoundCheck": true, "useOutputFolder": false])
 
@@ -168,6 +187,66 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
 
     func windowWillClose(_ notification: Notification) {
         isWindowVisible = false
+    }
+
+    // MARK: - Sparkle Delegate / Update-Install Re-registration
+
+    func updater(_ updater: SPUUpdater, willInstallUpdateOnQuit item: SUAppcastItem, immediateInstallationBlock immediateInstallHandler: @escaping () -> Void) -> Bool {
+        if !updateWillInstallOnQuit {
+            updateWillInstallOnQuit = true
+            // NSSupportsSuddenTermination lets terminate() skip
+            // applicationWillTerminate entirely — with an install staged we
+            // need the orderly path so the re-registration helper spawns.
+            ProcessInfo.processInfo.disableSuddenTermination()
+            // Belt and braces: also spawn a helper now with a longer fuse, in
+            // case termination still bypasses the delegate (idempotent).
+            spawnFinderExtensionReregistrationHelper(delaySeconds: 90)
+        }
+        // Returning true tells Sparkle we own the immediate-install handler
+        // (we never call it — we just quit and let the on-termination install
+        // run). Returning false keeps Sparkle's scheduler session alive,
+        // which would deadlock quitAfterConversion's sessionInProgress poll.
+        return true
+    }
+
+
+    func applicationWillTerminate(_ notification: Notification) {
+        // When Sparkle replaces the bundle after we exit, the Finder
+        // extension's pluginkit registration is dropped and nothing
+        // re-registers it until the app next launches — headless-only users
+        // would silently lose the right-click menu items. Leave behind a
+        // detached helper that re-registers the freshly installed bundle.
+        guard updateWillInstallOnQuit else { return }
+        spawnFinderExtensionReregistrationHelper(delaySeconds: 60)
+    }
+
+    private func spawnFinderExtensionReregistrationHelper(delaySeconds: Int) {
+        let appPath = Bundle.main.bundlePath
+        let quotedPath = "'\(appPath.replacingOccurrences(of: "'", with: "'\\''"))'"
+
+        // Only re-elect if the extension is currently enabled — never override
+        // a user who explicitly turned it off in System Settings.
+        let electLine = (finderExtensionEnabled() == true)
+            ? "/usr/bin/pluginkit -e use -i \(finderExtensionID)"
+            : ""
+
+        // lsregister alone does NOT make pkd re-scan the appex — only an app
+        // launch does. The --register-extension cameo launches invisibly and
+        // quits itself; afterwards, restore the election.
+        let script = """
+            sleep \(delaySeconds)
+            /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f \(quotedPath)
+            /usr/bin/open \(quotedPath) --args --register-extension
+            sleep 12
+            \(electLine)
+            """
+
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        task.arguments = ["-c", script]
+        task.standardOutput = FileHandle.nullDevice
+        task.standardError = FileHandle.nullDevice
+        try? task.run()  // deliberately not awaited — it outlives this process
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -410,7 +489,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
         // stop auto-quitting entirely.
         if isWindowVisible { return }
 
-        guard updater.updater.sessionInProgress else {
+        // A staged install-on-quit is NOT a reason to stay alive — quitting
+        // is exactly what triggers that install.
+        guard updater.updater.sessionInProgress && !updateWillInstallOnQuit else {
             NSApp.terminate(nil)
             return
         }
