@@ -62,6 +62,33 @@ BUILD LOG (newest first)
 ================================================================================
 
 --------------------------------------------------------------------------------
+VERSION 3.3.3 - 2026-07-18
+--------------------------------------------------------------------------------
+
+Self-Healing Finder Extension Registration
+
+Fixes:
+  [+] Sparkle's install-on-quit replaces the bundle while nothing is
+      running, which drops the Finder extension's pluginkit registration —
+      nothing re-registers it until the app next launches, so silent
+      auto-update users lost the right-click menu items indefinitely.
+      The app now detects a staged install (SPUUpdaterDelegate
+      willInstallUpdateOnQuit) and spawns a detached helper on terminate
+      that waits out the install, relaunches the new bundle invisibly
+      (--register-extension: accessory-mode, 8s, self-quitting — only a
+      real app launch makes pkd re-scan the appex; lsregister alone does
+      not), and restores the pluginkit election.
+  [+] Sudden termination is disabled once an install is staged, otherwise
+      applicationWillTerminate never runs (NSSupportsSuddenTermination).
+  [+] The willInstallUpdateOnQuit delegate must return YES — returning NO
+      keeps Sparkle's session alive forever and would deadlock the
+      3.3.2 quit guard's sessionInProgress poll.
+
+Known gap: updating FROM <= 3.3.2 hits the dropped registration one last
+time (the old app has no helper); opening the app once restores the menu.
+
+
+--------------------------------------------------------------------------------
 VERSION 3.3.2 - 2026-07-13
 --------------------------------------------------------------------------------
 
